@@ -1,0 +1,26 @@
+[package]
+name = "pundit-writer"
+version = "0.1.0"
+edition = "2021"
+description = "A cross-platform CLI tool for generating entire books using Hugging Face models"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+
+[[bin]]
+name = "pundit"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+indicatif = "0.17"
+console = "0.15"
+dialoguer = "0.11"
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+directories = "5.0"
