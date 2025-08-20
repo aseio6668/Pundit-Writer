@@ -1145,6 +1145,9 @@ fn get_clean_context_for_section(content: &Content, section_number: usize, secti
         ContentType::PlanningDoc => "Planning Document",
         ContentType::MeetingNotes => "Meeting Notes",
         ContentType::MeetingSummary => "Meeting Summary",
+        ContentType::Dictionary => "Dictionary",
+        ContentType::EducationalLesson => "Educational Lesson",
+        ContentType::ChildrensBook => "Children's Book",
     };
     
     let mut context = format!(
@@ -1430,6 +1433,9 @@ async fn output_content(content: &Content, output_path: Option<PathBuf>, config:
         ContentType::PlanningDoc => "planningdoc",
         ContentType::MeetingNotes => "meetingnotes",
         ContentType::MeetingSummary => "meetingsummary",
+        ContentType::Dictionary => "dictionary",
+        ContentType::EducationalLesson => "educationallesson",
+        ContentType::ChildrensBook => "childrensbook",
     };
     
     // Save as plain text
@@ -1541,6 +1547,9 @@ pub async fn interactive_mode() -> Result<()> {
                         "🎧 Audio Script - Podcast, radio play, or audio drama",
                         "🎮 Game Script - Interactive dialogue with branching choices",
                         "📄 Business Document - Professional or technical document",
+                        "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
+                        "🎓 Educational Lesson - Language learning, tutorials, instruction",
+                        "👶 Children's Book - Age-appropriate stories and learning",
                         "← Back to mode selection",
                     ];
                     
@@ -1611,6 +1620,18 @@ pub async fn interactive_mode() -> Result<()> {
         13 => {
             // Document creation
             interactive_document_creation().await
+        },
+        14 => {
+            // Dictionary creation
+            interactive_dictionary_creation().await
+        },
+        15 => {
+            // Educational lesson creation
+            interactive_educational_lesson_creation().await
+        },
+        16 => {
+            // Children's book creation
+            interactive_childrens_book_creation().await
         },
                         _ => {
                             println!("Invalid selection");
@@ -1700,28 +1721,16 @@ async fn interactive_screenplay_creation() -> Result<()> {
         // Style selection
         let style = WritingStyle::Dramatic; // Default for screenplays
         
-        // Model selection
-        let model_options = vec![
-            "🏠 Local Ollama models (recommended)",
-            "☁️ Cloud models (HuggingFace)",
-            "← Back",
-        ];
+        // Model selection with proper recommendations
+        let length_desc = match length {
+            ScreenplayLength::Short => "Short",
+            ScreenplayLength::Feature => "Medium", 
+            ScreenplayLength::Epic => "Long",
+        };
         
-        let model_idx = Select::new()
-            .with_prompt("Which AI model would you like to use?")
-            .items(&model_options)
-            .default(0)
-            .interact()?;
-        
-        if model_idx == model_options.len() - 1 {
-            continue; // Back to length selection
-        }
-        
-        let use_local = model_idx == 0;
-        let model = if use_local {
-            "llama3.2".to_string()
-        } else {
-            "gpt2".to_string()
+        let (use_local, model) = match interactive_model_selection("screenplay", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue, // Back was selected
         };
         
         // Create the screenplay
@@ -1816,28 +1825,17 @@ async fn interactive_play_creation() -> Result<()> {
         _ => WritingStyle::Dramatic,
         };
         
-        // Model selection
-        let model_options = vec![
-            "🏠 Local Ollama models (recommended)",
-            "☁️ Cloud models (HuggingFace)",
-            "← Back",
-        ];
+        // Model selection with proper recommendations  
+        let length_desc = match length {
+            PlayLength::OneAct => "Short",
+            PlayLength::Full => "Medium",
+            PlayLength::Epic => "Long",
+            PlayLength::Musical => "Medium",
+        };
         
-        let model_idx = Select::new()
-            .with_prompt("Which AI model would you like to use?")
-            .items(&model_options)
-            .default(0)
-            .interact()?;
-        
-        if model_idx == model_options.len() - 1 {
-            continue; // Back to style selection
-        }
-        
-        let use_local = model_idx == 0;
-        let model = if use_local {
-            "llama3.2".to_string()
-        } else {
-            "gpt2".to_string()
+        let (use_local, model) = match interactive_model_selection("stage play", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue, // Back was selected
         };
         
         // Create the stage play
@@ -1949,17 +1947,14 @@ async fn interactive_tv_creation() -> Result<()> {
         _ => WritingStyle::Dramatic,
     };
     
-    // Model selection
-    let use_local = Confirm::new()
-        .with_prompt("Use local Ollama models? (otherwise will use cloud models)")
-        .default(true)
-        .interact()?;
-    
-    let model = if use_local {
-        "llama3.2".to_string()
-    } else {
-        "gpt2".to_string()
+    // Model selection with proper recommendations
+    let episodes_desc = match episodes {
+        1..=3 => "Short",
+        4..=8 => "Medium", 
+        _ => "Large",
     };
+    
+    let (use_local, model) = interactive_model_selection("TV script", episodes_desc)?;
     
     println!("\n🎬 Creating {} {} episodes...", episodes, show_type_name(&show_type));
     
@@ -2202,17 +2197,14 @@ async fn interactive_audio_creation() -> Result<()> {
         },
     };
     
-    // Model selection
-    let use_local = Confirm::new()
-        .with_prompt("Use local Ollama models? (otherwise will use cloud models)")
-        .default(true)
-        .interact()?;
-    
-    let model = if use_local {
-        "llama3.2".to_string()
-    } else {
-        "gpt2".to_string()
+    // Model selection with proper recommendations
+    let duration_desc = match duration {
+        1..=15 => "Short",
+        16..=60 => "Medium",
+        _ => "Large",
     };
+    
+    let (use_local, model) = interactive_model_selection("audio script", duration_desc)?;
     
     println!("\n🎙️ Creating {} minute {} script...", duration, audio_type_name(&audio_type));
     
@@ -2333,17 +2325,14 @@ async fn interactive_game_creation() -> Result<()> {
         .default(true)
         .interact()?;
     
-    // Model selection
-    let use_local = Confirm::new()
-        .with_prompt("Use local Ollama models? (otherwise will use cloud models)")
-        .default(true)
-        .interact()?;
-    
-    let model = if use_local {
-        "llama3.2".to_string()
-    } else {
-        "gpt2".to_string()
+    // Model selection with proper recommendations
+    let characters_desc = match characters {
+        1..=3 => "Short",
+        4..=8 => "Medium",
+        _ => "Large", 
     };
+    
+    let (use_local, model) = interactive_model_selection("game script", characters_desc)?;
     
     println!("\n🎯 Creating {} {} script with {} character interactions...", 
              game_genre_name(&genre), "game", characters);
@@ -2597,17 +2586,15 @@ async fn interactive_document_creation() -> Result<()> {
         _ => false,
     };
     
-    // Model selection
-    let use_local = Confirm::new()
-        .with_prompt("Use local Ollama models? (otherwise will use cloud models)")
-        .default(true)
-        .interact()?;
-    
-    let model = if use_local {
-        "llama3.2".to_string()
-    } else {
-        "gpt2".to_string()
+    // Model selection with proper recommendations
+    let length_desc = match length {
+        DocumentLength::Brief => "Short",
+        DocumentLength::Standard => "Medium",
+        DocumentLength::Comprehensive => "Large",
+        DocumentLength::Extensive => "Large",
     };
+    
+    let (use_local, model) = interactive_model_selection("document", length_desc)?;
     
     println!("\n📋 Creating {} {} {}...", 
              document_length_name(&length), 
@@ -2691,195 +2678,231 @@ pub async fn narrate_mode() -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
     
-    println!("{}", console::style("🎭 Pundit - Narration Mode").bold().magenta());
-    println!("═══════════════════════════════════════");
-    println!();
-    println!("Welcome to Pundit's interactive narration mode!");
-    println!("I'll ask you a few questions to understand what kind of book you'd like me to write.");
-    println!();
-    
-    // Genre selection
-    let genres = vec![
-        "Fiction", "Non-Fiction", "Mystery", "Romance", "Science Fiction", 
-        "Fantasy", "Horror", "Thriller", "Biography", "History", "Self-Help",
-        "Technical", "Poetry", "Drama", "Comedy", "Adventure", "Crime"
-    ];
-    
-    let genre_idx = Select::new()
-        .with_prompt("What genre would you like your book to be?")
-        .items(&genres)
-        .default(0)
-        .interact()?;
-    
-    let genre = match genre_idx {
-        0 => Genre::Fiction,
-        1 => Genre::NonFiction,
-        2 => Genre::Mystery,
-        3 => Genre::Romance,
-        4 => Genre::SciFi,
-        5 => Genre::Fantasy,
-        6 => Genre::Horror,
-        7 => Genre::Thriller,
-        8 => Genre::Biography,
-        9 => Genre::History,
-        10 => Genre::SelfHelp,
-        11 => Genre::Technical,
-        12 => Genre::Poetry,
-        13 => Genre::Drama,
-        14 => Genre::Comedy,
-        15 => Genre::Adventure,
-        16 => Genre::Crime,
-        _ => Genre::Fiction,
-    };
-    
-    // Writing style selection
-    let styles = vec![
-        "Conversational", "Descriptive", "Narrative", "Creative", "Formal",
-        "Casual", "Poetic", "Humorous", "Dramatic", "First Person", "Third Person"
-    ];
-    
-    let style_idx = Select::new()
-        .with_prompt("What writing style do you prefer?")
-        .items(&styles)
-        .default(0)
-        .interact()?;
-    
-    let style = match style_idx {
-        0 => WritingStyle::Conversational,
-        1 => WritingStyle::Descriptive,
-        2 => WritingStyle::Narrative,
-        3 => WritingStyle::Creative,
-        4 => WritingStyle::Formal,
-        5 => WritingStyle::Casual,
-        6 => WritingStyle::Poetic,
-        7 => WritingStyle::Humorous,
-        8 => WritingStyle::Dramatic,
-        9 => WritingStyle::FirstPerson,
-        10 => WritingStyle::ThirdPerson,
-        _ => WritingStyle::Conversational,
-    };
-    
-    // Book size selection
-    let sizes = vec![
-        "Short Story (1,000-7,500 words)",
-        "Short Book (20,000-50,000 words)",
-        "Medium Book (50,000-80,000 words)",
-        "Large Book (80,000-120,000 words)",
-        "Very Large Book (120,000-200,000 words)",
-        "Unlimited (Let Pundit decide when to stop)"
-    ];
-    
-    let size_idx = Select::new()
-        .with_prompt("How long should your book be?")
-        .items(&sizes)
-        .default(2)
-        .interact()?;
-    
-    let size = match size_idx {
-        0 => BookSize::ShortStory,
-        1 => BookSize::Short,
-        2 => BookSize::Medium,
-        3 => BookSize::Large,
-        4 => BookSize::VeryLarge,
-        5 => BookSize::Unlimited,
-        _ => BookSize::Medium,
-    };
-    
-    // Model type selection
-    println!("\n🤖 Model Selection:");
-    let model_options = vec![
-        "🏠 Local models (Ollama) - No API key needed, runs offline",
-        "☁️  Cloud models (HuggingFace) - Requires API key or limited free tier"
-    ];
-    
-    let model_type_idx = Select::new()
-        .with_prompt("Which type of model would you like to use?")
-        .items(&model_options)
-        .default(0) // Default to local
-        .interact()?;
-    
-    let (use_local, model) = if model_type_idx == 0 {
-        // Local models
-        let recommended_local = get_ollama_recommendation(&size);
-        println!("\n🏠 Local Model Options:");
-        println!("   Recommended: {} for {} books", recommended_local, size_to_description(&size));
-        println!("   Note: Make sure you have Ollama installed and the model downloaded");
+    'book_setup: loop {
+        println!("{}", console::style("🎭 Pundit - Narration Mode").bold().magenta());
+        println!("═══════════════════════════════════════");
+        println!();
+        println!("Welcome to Pundit's interactive narration mode!");
+        println!("I'll ask you a few questions to understand what kind of book you'd like me to write.");
+        println!();
         
-        let use_recommended_local = Confirm::new()
-            .with_prompt(&format!("Use recommended local model ({}) for this book size?", recommended_local))
-            .default(true)
-            .interact()?;
-        
-        let local_model = if use_recommended_local {
-            recommended_local.to_string()
-        } else {
-            println!("\n📋 Available Ollama models:");
-            println!("   Fast: llama3.2:1b, gemma2:2b, phi3:mini");
-            println!("   Balanced: llama3.2, mistral:7b, qwen2:7b");
-            println!("   High Quality: llama3.1:8b, gemma2:9b, codellama:7b");
+        // Genre selection
+        'genre_selection: loop {
+            let genres = vec![
+                "Fiction", "Non-Fiction", "Mystery", "Romance", "Science Fiction", 
+                "Fantasy", "Horror", "Thriller", "Biography", "History", "Self-Help",
+                "Technical", "Poetry", "Drama", "Comedy", "Adventure", "Crime",
+                "Educational (Language Learning, Textbooks, Courses)", 
+                "← Back to main menu"
+            ];
             
-            Input::new()
-                .with_prompt("Enter Ollama model name")
-                .with_initial_text(recommended_local)
-                .interact_text()?
-        };
-        
-        (true, local_model)
-    } else {
-        // Cloud models
-        let recommended_cloud = get_model_recommendation(&size);
-        println!("\n☁️ Cloud Model Options:");
-        println!("   Recommended: {} for {} books", recommended_cloud, size_to_description(&size));
-        println!("   Note: Some models work without API key, others may require authentication");
-        
-        let use_recommended_cloud = Confirm::new()
-            .with_prompt(&format!("Use recommended cloud model ({}) for this book size?", recommended_cloud))
-            .default(true)
-            .interact()?;
-        
-        let cloud_model = if use_recommended_cloud {
-            recommended_cloud.to_string()
-        } else {
-            Input::new()
-                .with_prompt("Enter HuggingFace model name")
-                .with_initial_text(recommended_cloud)
-                .interact_text()?
-        };
-        
-        (false, cloud_model)
-    };
-    
-    // API Key (only for cloud models)
-    let api_key = if !use_local {
-        let has_api_key = Confirm::new()
-            .with_prompt("Do you have a Hugging Face API key? (recommended for better performance)")
-            .default(false)
-            .interact()?;
-        
-        if has_api_key {
-            Some(Input::new()
-                .with_prompt("Enter your Hugging Face API key")
-                .interact_text()?)
-        } else {
-            None
+            let genre_idx = Select::new()
+                .with_prompt("What genre would you like your book to be?")
+                .items(&genres)
+                .default(0)
+                .interact()?;
+            
+            if genre_idx == genres.len() - 1 {
+                return Ok(()); // Back to main menu
+            }
+            
+            // Handle Educational books separately
+            if genre_idx == 17 { // Educational option
+                return create_educational_book().await;
+            }
+            
+            let genre = match genre_idx {
+                0 => Genre::Fiction,
+                1 => Genre::NonFiction,
+                2 => Genre::Mystery,
+                3 => Genre::Romance,
+                4 => Genre::SciFi,
+                5 => Genre::Fantasy,
+                6 => Genre::Horror,
+                7 => Genre::Thriller,
+                8 => Genre::Biography,
+                9 => Genre::History,
+                10 => Genre::SelfHelp,
+                11 => Genre::Technical,
+                12 => Genre::Poetry,
+                13 => Genre::Drama,
+                14 => Genre::Comedy,
+                15 => Genre::Adventure,
+                16 => Genre::Crime,
+                _ => Genre::Fiction,
+            };
+            
+            // Writing style selection
+            'style_selection: loop {
+                let styles = vec![
+                    "Conversational", "Descriptive", "Narrative", "Creative", "Formal",
+                    "Casual", "Poetic", "Humorous", "Dramatic", "First Person", "Third Person",
+                    "← Back to genre selection"
+                ];
+                
+                let style_idx = Select::new()
+                    .with_prompt("What writing style do you prefer?")
+                    .items(&styles)
+                    .default(0)
+                    .interact()?;
+                
+                if style_idx == styles.len() - 1 {
+                    continue 'genre_selection; // Back to genre selection
+                }
+                
+                let style = match style_idx {
+                    0 => WritingStyle::Conversational,
+                    1 => WritingStyle::Descriptive,
+                    2 => WritingStyle::Narrative,
+                    3 => WritingStyle::Creative,
+                    4 => WritingStyle::Formal,
+                    5 => WritingStyle::Casual,
+                    6 => WritingStyle::Poetic,
+                    7 => WritingStyle::Humorous,
+                    8 => WritingStyle::Dramatic,
+                    9 => WritingStyle::FirstPerson,
+                    10 => WritingStyle::ThirdPerson,
+                    _ => WritingStyle::Conversational,
+                };
+                
+                // Book size selection
+                'size_selection: loop {
+                    let sizes = vec![
+                        "Short Story (1,000-7,500 words)",
+                        "Short Book (20,000-50,000 words)",
+                        "Medium Book (50,000-80,000 words)",
+                        "Large Book (80,000-120,000 words)",
+                        "Very Large Book (120,000-200,000 words)",
+                        "Unlimited (Let Pundit decide when to stop)",
+                        "← Back to style selection"
+                    ];
+                    
+                    let size_idx = Select::new()
+                        .with_prompt("How long should your book be?")
+                        .items(&sizes)
+                        .default(2)
+                        .interact()?;
+                    
+                    if size_idx == sizes.len() - 1 {
+                        continue 'style_selection; // Back to style selection
+                    }
+                    
+                    let size = match size_idx {
+                        0 => BookSize::ShortStory,
+                        1 => BookSize::Short,
+                        2 => BookSize::Medium,
+                        3 => BookSize::Large,
+                        4 => BookSize::VeryLarge,
+                        5 => BookSize::Unlimited,
+                        _ => BookSize::Medium,
+                    };
+                    
+                    // Model type selection
+                    'model_selection: loop {
+                        println!("\n🤖 Model Selection:");
+                        let model_options = vec![
+                            "🏠 Local models (Ollama) - No API key needed, runs offline",
+                            "☁️  Cloud models (HuggingFace) - Requires API key or limited free tier",
+                            "← Back to size selection"
+                        ];
+                        
+                        let model_type_idx = Select::new()
+                            .with_prompt("Which type of model would you like to use?")
+                            .items(&model_options)
+                            .default(0) // Default to local
+                            .interact()?;
+                        
+                        if model_type_idx == model_options.len() - 1 {
+                            continue 'size_selection; // Back to size selection
+                        }
+                        
+                        let (use_local, model) = if model_type_idx == 0 {
+                            // Local models
+                            let recommended_local = get_ollama_recommendation(&size);
+                            println!("\n🏠 Local Model Options:");
+                            println!("   Recommended: {} for {} books", recommended_local, size_to_description(&size));
+                            println!("   Note: Make sure you have Ollama installed and the model downloaded");
+                            
+                            let use_recommended_local = Confirm::new()
+                                .with_prompt(&format!("Use recommended local model ({}) for this book size?", recommended_local))
+                                .default(true)
+                                .interact()?;
+                            
+                            let local_model = if use_recommended_local {
+                                recommended_local.to_string()
+                            } else {
+                                println!("\n📋 Available Ollama models:");
+                                println!("   Fast: llama3.2:1b, gemma2:2b, phi3:mini");
+                                println!("   Balanced: llama3.2, mistral:7b, qwen2:7b");
+                                println!("   High Quality: llama3.1:8b, gemma2:9b, codellama:7b");
+                                
+                                Input::new()
+                                    .with_prompt("Enter Ollama model name")
+                                    .with_initial_text(recommended_local)
+                                    .interact_text()?
+                            };
+                            
+                            (true, local_model)
+                        } else {
+                            // Cloud models
+                            let recommended_cloud = get_model_recommendation(&size);
+                            println!("\n☁️ Cloud Model Options:");
+                            println!("   Recommended: {} for {} books", recommended_cloud, size_to_description(&size));
+                            println!("   Note: Some models work without API key, others may require authentication");
+                            
+                            let use_recommended_cloud = Confirm::new()
+                                .with_prompt(&format!("Use recommended cloud model ({}) for this book size?", recommended_cloud))
+                                .default(true)
+                                .interact()?;
+                            
+                            let cloud_model = if use_recommended_cloud {
+                                recommended_cloud.to_string()
+                            } else {
+                                Input::new()
+                                    .with_prompt("Enter HuggingFace model name")
+                                    .with_initial_text(recommended_cloud)
+                                    .interact_text()?
+                            };
+                            
+                            (false, cloud_model)
+                        };
+                        
+                        // API Key (only for cloud models)
+                        let api_key = if !use_local {
+                            let has_api_key = Confirm::new()
+                                .with_prompt("Do you have a Hugging Face API key? (recommended for better performance)")
+                                .default(false)
+                                .interact()?;
+                            
+                            if has_api_key {
+                                Some(Input::new()
+                                    .with_prompt("Enter your Hugging Face API key")
+                                    .interact_text()?)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        
+                        println!("\n✨ Perfect! Let me start writing your {} {} book in {} style.", 
+                            genre, size_to_description(&size), style);
+                        
+                        if use_local {
+                            println!("🏠 Using local model: {}", model);
+                            println!("📡 Connecting to Ollama server...");
+                        } else {
+                            println!("☁️  Using cloud model: {}", model);
+                        }
+                        println!();
+                        
+                        // Start writing
+                        return write_book(genre, style, size, None, model, api_key, use_local, "http://localhost:11434".to_string()).await;
+                    }
+                }
+            }
         }
-    } else {
-        None
-    };
-    
-    println!("\n✨ Perfect! Let me start writing your {} {} book in {} style.", 
-        genre, size_to_description(&size), style);
-    
-    if use_local {
-        println!("🏠 Using local model: {}", model);
-        println!("📡 Connecting to Ollama server...");
-    } else {
-        println!("☁️  Using cloud model: {}", model);
     }
-    println!();
-    
-    // Start writing
-    write_book(genre, style, size, None, model, api_key, use_local, "http://localhost:11434".to_string()).await
 }
 
 fn size_to_description(size: &BookSize) -> &'static str {
@@ -3055,7 +3078,9 @@ pub async fn continue_content(
         ContentType::ResearchReport | ContentType::Poetry | ContentType::Journal |
         ContentType::MarketingAd | ContentType::PressRelease | ContentType::MediaKit |
         ContentType::BlogPost | ContentType::SeoArticle | ContentType::StrategicDoc |
-        ContentType::PlanningDoc | ContentType::MeetingNotes | ContentType::MeetingSummary => SectionType::Section,
+        ContentType::PlanningDoc | ContentType::MeetingNotes | ContentType::MeetingSummary |
+        ContentType::Dictionary | ContentType::EducationalLesson => SectionType::Section,
+        ContentType::ChildrensBook => SectionType::Chapter,
     };
     
     // Write sections with continuation context
@@ -3213,6 +3238,9 @@ fn extract_continuation_context(content: &str, content_type: ContentType) -> Str
             ContentType::PlanningDoc => "planning document",
             ContentType::MeetingNotes => "meeting notes",
             ContentType::MeetingSummary => "meeting summary",
+            ContentType::Dictionary => "dictionary",
+            ContentType::EducationalLesson => "educational lesson",
+            ContentType::ChildrensBook => "children's book",
         },
         max_context_words,
         context_excerpt
@@ -4781,6 +4809,9 @@ fn get_enhanced_context_for_section(content: &Content, section_number: usize, se
         ContentType::PlanningDoc => "Planning Document",
         ContentType::MeetingNotes => "Meeting Notes",
         ContentType::MeetingSummary => "Meeting Summary",
+        ContentType::Dictionary => "Dictionary",
+        ContentType::EducationalLesson => "Educational Lesson",
+        ContentType::ChildrensBook => "Children's Book",
     };
     
     let mut context = format!(
@@ -6250,4 +6281,1859 @@ async fn generate_continuation(
         .join("\n");
     
     Ok(cleaned_result)
+}
+
+// Dictionary creation with etymological features
+async fn interactive_dictionary_creation() -> Result<()> {
+    loop {
+        println!("\n📖 Creating a Dictionary/Lexicon");
+        println!("Let me help you create a comprehensive dictionary with etymological features...\n");
+        
+        // Dictionary type selection
+        let dict_types = vec![
+            "Standard Dictionary - Traditional word definitions",
+            "Etymological Dictionary - Word origins and evolution", 
+            "Thematic Dictionary - Words grouped by themes",
+            "Bilingual Dictionary - Two-language dictionary",
+            "Technical Dictionary - Specialized terminology",
+            "Slang Dictionary - Informal language and expressions",
+            "Historical Dictionary - Historical word usage",
+            "Creative Dictionary - Imaginative/fictional lexicon",
+            "← Back to main menu",
+        ];
+        
+        let dict_type_idx = Select::new()
+            .with_prompt("What type of dictionary would you like to create?")
+            .items(&dict_types)
+            .default(0)
+            .interact()?;
+        
+        if dict_type_idx == dict_types.len() - 1 {
+            return Ok(()); // Back to main menu
+        }
+        
+        let dict_type = match dict_type_idx {
+            0 => crate::cli_types::DictionaryType::Standard,
+            1 => crate::cli_types::DictionaryType::Etymological,
+            2 => crate::cli_types::DictionaryType::Thematic,
+            3 => crate::cli_types::DictionaryType::Bilingual,
+            4 => crate::cli_types::DictionaryType::Technical,
+            5 => crate::cli_types::DictionaryType::Slang,
+            6 => crate::cli_types::DictionaryType::Historical,
+            7 => crate::cli_types::DictionaryType::Creative,
+            _ => crate::cli_types::DictionaryType::Standard,
+        };
+        
+        // Get topic/theme for the dictionary
+        let topic_result: Result<String, _> = Input::new()
+            .with_prompt("What topic, theme, or subject area should this dictionary focus on? (or 'back' to return)")
+            .interact_text();
+        
+        let topic = match topic_result {
+            Ok(t) if t.trim().to_lowercase() == "back" => continue,
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        
+        // Length selection
+        let lengths = vec![
+            "Pocket Dictionary (500-2,000 entries)",
+            "Standard Dictionary (2,000-10,000 entries)",
+            "Comprehensive Dictionary (10,000-50,000 entries)",
+            "Unabridged Dictionary (50,000+ entries)",
+            "Unlimited - Let creativity flow",
+            "← Back",
+        ];
+        
+        let length_idx = Select::new()
+            .with_prompt("How extensive should your dictionary be?")
+            .items(&lengths)
+            .default(1)
+            .interact()?;
+        
+        if length_idx == lengths.len() - 1 {
+            continue; // Back to dictionary type selection
+        }
+        
+        let length = match length_idx {
+            0 => crate::cli_types::DictionaryLength::Pocket,
+            1 => crate::cli_types::DictionaryLength::Standard,
+            2 => crate::cli_types::DictionaryLength::Comprehensive,
+            3 => crate::cli_types::DictionaryLength::Unabridged,
+            4 => crate::cli_types::DictionaryLength::Unlimited,
+            _ => crate::cli_types::DictionaryLength::Standard,
+        };
+        
+        // Model selection with proper recommendations
+        let length_desc = match length {
+            crate::cli_types::DictionaryLength::Pocket => "Short",
+            crate::cli_types::DictionaryLength::Standard => "Medium",
+            crate::cli_types::DictionaryLength::Comprehensive => "Large",
+            crate::cli_types::DictionaryLength::Unabridged => "Large", 
+            crate::cli_types::DictionaryLength::Unlimited => "Extended",
+        };
+        
+        let (use_local, model) = match interactive_model_selection("dictionary", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue, // Back was selected
+        };
+        
+        // Create the dictionary
+        return write_dictionary(dict_type, topic, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+    }
+}
+
+// Educational lesson creation with language learning support
+async fn interactive_educational_lesson_creation() -> Result<()> {
+    loop {
+        println!("\n🎓 Creating Educational Lesson");
+        println!("Let me help you create engaging educational content with learning support...\n");
+        
+        // Educational type selection
+        let edu_types = vec![
+            "Language Learning - Teaching a new language",
+            "Translation Lesson - Between two languages",
+            "Grammar Lesson - Grammar rules and examples",
+            "Vocabulary Building - Word learning and usage",
+            "Literature Analysis - Literary texts and interpretation",
+            "History Lesson - Historical events and context",
+            "Science Concepts - Scientific principles and examples",
+            "Mathematics - Math concepts and problem solving",
+            "Creative Arts - Art, music, and creative expression",
+            "General Education - Broad educational topics",
+            "← Back to main menu",
+        ];
+        
+        let edu_type_idx = Select::new()
+            .with_prompt("What type of educational content would you like to create?")
+            .items(&edu_types)
+            .default(0)
+            .interact()?;
+        
+        if edu_type_idx == edu_types.len() - 1 {
+            return Ok(()); // Back to main menu
+        }
+        
+        let edu_type = match edu_type_idx {
+            0 => crate::cli_types::EducationalType::LanguageLearning,
+            1 => crate::cli_types::EducationalType::Translation,
+            2 => crate::cli_types::EducationalType::Grammar,
+            3 => crate::cli_types::EducationalType::Vocabulary,
+            4 => crate::cli_types::EducationalType::Literature,
+            5 => crate::cli_types::EducationalType::History,
+            6 => crate::cli_types::EducationalType::Science,
+            7 => crate::cli_types::EducationalType::Mathematics,
+            8 => crate::cli_types::EducationalType::Arts,
+            9 => crate::cli_types::EducationalType::General,
+            _ => crate::cli_types::EducationalType::General,
+        };
+        
+        // Get subject/topic
+        let topic_result: Result<String, _> = Input::new()
+            .with_prompt("What specific topic or subject should this lesson cover? (or 'back' to return)")
+            .interact_text();
+        
+        let topic = match topic_result {
+            Ok(t) if t.trim().to_lowercase() == "back" => continue,
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        
+        // Audience selection
+        let audiences = vec![
+            "Preschool (Ages 3-5)",
+            "Elementary (Ages 6-11)",
+            "Middle School (Ages 12-14)",
+            "High School (Ages 15-18)",
+            "College (Ages 18+)",
+            "Adult Learners",
+            "Professional Development",
+            "Senior Learners",
+            "All Audiences",
+            "← Back",
+        ];
+        
+        let audience_idx = Select::new()
+            .with_prompt("Who is your target audience?")
+            .items(&audiences)
+            .default(4)
+            .interact()?;
+        
+        if audience_idx == audiences.len() - 1 {
+            continue; // Back to educational type selection
+        }
+        
+        let audience = match audience_idx {
+            0 => crate::cli_types::EducationalAudience::Preschool,
+            1 => crate::cli_types::EducationalAudience::Elementary,
+            2 => crate::cli_types::EducationalAudience::MiddleSchool,
+            3 => crate::cli_types::EducationalAudience::HighSchool,
+            4 => crate::cli_types::EducationalAudience::College,
+            5 => crate::cli_types::EducationalAudience::Adult,
+            6 => crate::cli_types::EducationalAudience::Professional,
+            7 => crate::cli_types::EducationalAudience::Senior,
+            8 => crate::cli_types::EducationalAudience::All,
+            _ => crate::cli_types::EducationalAudience::All,
+        };
+        
+        // Length selection
+        let lengths = vec![
+            "Quick Lesson (5-15 minutes)",
+            "Standard Lesson (15-45 minutes)",
+            "Extended Lesson (45-90 minutes)",
+            "Course Module (Multiple sessions)",
+            "Full Course (Complete curriculum)",
+            "← Back",
+        ];
+        
+        let length_idx = Select::new()
+            .with_prompt("How long should this educational content be?")
+            .items(&lengths)
+            .default(1)
+            .interact()?;
+        
+        if length_idx == lengths.len() - 1 {
+            continue; // Back to audience selection
+        }
+        
+        let length = match length_idx {
+            0 => crate::cli_types::EducationalLength::QuickLesson,
+            1 => crate::cli_types::EducationalLength::StandardLesson,
+            2 => crate::cli_types::EducationalLength::ExtendedLesson,
+            3 => crate::cli_types::EducationalLength::CourseModule,
+            4 => crate::cli_types::EducationalLength::FullCourse,
+            _ => crate::cli_types::EducationalLength::StandardLesson,
+        };
+        
+        // Model selection with proper recommendations
+        let length_desc = match length {
+            crate::cli_types::EducationalLength::QuickLesson => "Short",
+            crate::cli_types::EducationalLength::StandardLesson => "Medium",
+            crate::cli_types::EducationalLength::ExtendedLesson => "Extended",
+            crate::cli_types::EducationalLength::CourseModule => "Large",
+            crate::cli_types::EducationalLength::FullCourse => "Large",
+        };
+        
+        let (use_local, model) = match interactive_model_selection("educational lesson", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue, // Back was selected
+        };
+        
+        // Create the educational lesson
+        return write_educational_lesson(edu_type, topic, audience, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+    }
+}
+
+// Children's book creation with age-appropriate content
+async fn interactive_childrens_book_creation() -> Result<()> {
+    loop {
+        println!("\n👶 Creating Children's Book");
+        println!("Let me help you create delightful, age-appropriate children's content...\n");
+        
+        // Children's book type selection
+        let book_types = vec![
+            "Picture Book - Ages 2-8, with illustration descriptions",
+            "Early Reader - Ages 4-8, simple text and words",
+            "Chapter Book - Ages 6-10, short chapters",
+            "Middle Grade - Ages 8-12, longer adventure stories",
+            "Young Adult - Ages 12+, mature themes and complex plots",
+            "Educational Book - Learning-focused content",
+            "Bedtime Stories - Calming and gentle stories",
+            "Adventure Book - Action and exploration",
+            "Fantasy Book - Magical and imaginative worlds",
+            "Realistic Fiction - Real-world situations and growth",
+            "← Back to main menu",
+        ];
+        
+        let book_type_idx = Select::new()
+            .with_prompt("What type of children's book would you like to create?")
+            .items(&book_types)
+            .default(0)
+            .interact()?;
+        
+        if book_type_idx == book_types.len() - 1 {
+            return Ok(()); // Back to main menu
+        }
+        
+        let book_type = match book_type_idx {
+            0 => crate::cli_types::ChildrensBookType::PictureBook,
+            1 => crate::cli_types::ChildrensBookType::EarlyReader,
+            2 => crate::cli_types::ChildrensBookType::ChapterBook,
+            3 => crate::cli_types::ChildrensBookType::MiddleGrade,
+            4 => crate::cli_types::ChildrensBookType::YoungAdult,
+            5 => crate::cli_types::ChildrensBookType::Educational,
+            6 => crate::cli_types::ChildrensBookType::Bedtime,
+            7 => crate::cli_types::ChildrensBookType::Adventure,
+            8 => crate::cli_types::ChildrensBookType::Fantasy,
+            9 => crate::cli_types::ChildrensBookType::Realistic,
+            _ => crate::cli_types::ChildrensBookType::PictureBook,
+        };
+        
+        // Get story concept
+        let concept_result: Result<String, _> = Input::new()
+            .with_prompt("What's your story concept or theme? (e.g., 'friendship', 'brave mouse', 'learning colors') - can be just one word! (or 'back' to return)")
+            .interact_text();
+        
+        let concept = match concept_result {
+            Ok(t) if t.trim().to_lowercase() == "back" => continue,
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        
+        // Age group selection
+        let age_groups = vec![
+            "Toddler (Ages 1-3)",
+            "Preschool (Ages 3-5)",
+            "Kindergarten (Ages 5-6)",
+            "Early Elementary (Ages 6-8)",
+            "Elementary (Ages 8-11)",
+            "Middle Grade (Ages 11-14)",
+            "Young Adult (Ages 14+)",
+            "← Back",
+        ];
+        
+        let age_idx = Select::new()
+            .with_prompt("What age group is this book for?")
+            .items(&age_groups)
+            .default(2)
+            .interact()?;
+        
+        if age_idx == age_groups.len() - 1 {
+            continue; // Back to book type selection
+        }
+        
+        let age_group = match age_idx {
+            0 => crate::cli_types::ChildrensAgeGroup::Toddler,
+            1 => crate::cli_types::ChildrensAgeGroup::Preschool,
+            2 => crate::cli_types::ChildrensAgeGroup::Kindergarten,
+            3 => crate::cli_types::ChildrensAgeGroup::EarlyElementary,
+            4 => crate::cli_types::ChildrensAgeGroup::Elementary,
+            5 => crate::cli_types::ChildrensAgeGroup::MiddleGrade,
+            6 => crate::cli_types::ChildrensAgeGroup::YoungAdult,
+            _ => crate::cli_types::ChildrensAgeGroup::Kindergarten,
+        };
+        
+        // Length selection
+        let lengths = vec![
+            "Board Book (10-100 words, for toddlers)",
+            "Picture Book (100-1,000 words)",
+            "Early Reader (1,000-2,500 words)",
+            "Chapter Book (2,500-10,000 words)",
+            "Middle Grade (10,000-40,000 words)",
+            "Young Adult (40,000-80,000 words)",
+            "← Back",
+        ];
+        
+        let length_idx = Select::new()
+            .with_prompt("How long should this children's book be?")
+            .items(&lengths)
+            .default(1)
+            .interact()?;
+        
+        if length_idx == lengths.len() - 1 {
+            continue; // Back to age group selection
+        }
+        
+        let length = match length_idx {
+            0 => crate::cli_types::ChildrensBookLength::Board,
+            1 => crate::cli_types::ChildrensBookLength::Picture,
+            2 => crate::cli_types::ChildrensBookLength::Early,
+            3 => crate::cli_types::ChildrensBookLength::Chapter,
+            4 => crate::cli_types::ChildrensBookLength::Middle,
+            5 => crate::cli_types::ChildrensBookLength::Young,
+            _ => crate::cli_types::ChildrensBookLength::Picture,
+        };
+        
+        // Model selection with proper recommendations
+        let length_desc = match length {
+            crate::cli_types::ChildrensBookLength::Board => "Short",
+            crate::cli_types::ChildrensBookLength::Picture => "Short",
+            crate::cli_types::ChildrensBookLength::Early => "Medium",
+            crate::cli_types::ChildrensBookLength::Chapter => "Medium",
+            crate::cli_types::ChildrensBookLength::Middle => "Large",
+            crate::cli_types::ChildrensBookLength::Young => "Large",
+        };
+        
+        let (use_local, model) = match interactive_model_selection("children's book", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue, // Back was selected
+        };
+        
+        // Create the children's book
+        return write_childrens_book(book_type, concept, age_group, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+    }
+}
+
+// Placeholder writing functions - these will need to be implemented
+async fn write_dictionary(
+    dict_type: crate::cli_types::DictionaryType,
+    topic: String,
+    length: crate::cli_types::DictionaryLength,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("📖 Pundit - Dictionary Creator").bold().cyan());
+    println!("═══════════════════════════════════════");
+    println!();
+    
+    let dict_type_name = match dict_type {
+        crate::cli_types::DictionaryType::Standard => "Standard Dictionary",
+        crate::cli_types::DictionaryType::Etymological => "Etymological Dictionary",
+        crate::cli_types::DictionaryType::Thematic => "Thematic Dictionary",
+        crate::cli_types::DictionaryType::Bilingual => "Bilingual Dictionary",
+        crate::cli_types::DictionaryType::Technical => "Technical Dictionary",
+        crate::cli_types::DictionaryType::Slang => "Slang Dictionary",
+        crate::cli_types::DictionaryType::Historical => "Historical Dictionary",
+        crate::cli_types::DictionaryType::Creative => "Creative Dictionary",
+    };
+    
+    let target_entries = match length {
+        crate::cli_types::DictionaryLength::Pocket => 1000,
+        crate::cli_types::DictionaryLength::Standard => 5000,
+        crate::cli_types::DictionaryLength::Comprehensive => 25000,
+        crate::cli_types::DictionaryLength::Unabridged => 75000,
+        crate::cli_types::DictionaryLength::Unlimited => 10000, // Default reasonable size
+    };
+    
+    println!("📝 Creating {} focused on: {}", dict_type_name, topic);
+    println!("🎯 Target: {} entries", target_entries);
+    println!();
+    
+    // Create the content
+    let mut content = Content::new_document(
+        format!("{} - {}", dict_type_name, topic),
+        "Pundit AI".to_string(),
+        "Lexicographical".to_string(),
+        format!("A comprehensive {} covering {} terminology and definitions.", dict_type_name.to_lowercase(), topic),
+        (target_entries / 100).max(10), // Estimate pages based on entries
+        crate::content::DocumentFormat::Educational,
+        model.clone(),
+    );
+    
+    content.content_type = ContentType::Dictionary;
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    // Generate entries in sections (100 entries per section)
+    let entries_per_section = 100;
+    let total_sections = (target_entries / entries_per_section).max(1);
+    
+    println!("📊 Generating {} dictionary entries in {} sections...", target_entries, total_sections);
+    
+    let progress_bar = ProgressBar::new(total_sections as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} sections ({percent}%)")
+        .unwrap()
+        .progress_chars("#>-"));
+    
+    for section_num in 1..=total_sections {
+        let start_letter = ((section_num - 1) * 26 / total_sections) as u8 + b'A';
+        let end_letter = (section_num * 26 / total_sections).min(26) as u8 + b'A' - 1;
+        let letter_range = format!("{}-{}", start_letter as char, end_letter as char);
+        
+        progress_bar.set_message(format!("Creating entries {}", letter_range));
+        
+        if let Err(e) = write_dictionary_section(&client, &model, &mut content, section_num, &topic, &dict_type, entries_per_section, &letter_range, &progress_bar).await {
+            println!("\n❌ Error writing section {}: {}", section_num, e);
+            break;
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Dictionary creation complete!");
+    
+    // Save the content
+    let filename = output.unwrap_or_else(|| {
+        format!("{}_dictionary_{}.txt", 
+            topic.replace(" ", "_").to_lowercase(),
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+    });
+    
+    let content_text = content.to_text();
+    fs::write(&filename, content_text)?;
+    
+    println!("\n✅ Dictionary saved to: {}", filename);
+    println!("📊 Total entries: {}", content.sections.len() * entries_per_section);
+    println!("📄 Total words: {}", content.metadata.current_word_count);
+    
+    Ok(())
+}
+
+async fn write_educational_lesson(
+    edu_type: crate::cli_types::EducationalType,
+    topic: String,
+    audience: crate::cli_types::EducationalAudience,
+    length: crate::cli_types::EducationalLength,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("🎓 Pundit - Educational Content Creator").bold().green());
+    println!("═══════════════════════════════════════");
+    println!();
+    
+    let edu_type_name = match edu_type {
+        crate::cli_types::EducationalType::LanguageLearning => "Language Learning",
+        crate::cli_types::EducationalType::Translation => "Translation Lesson",
+        crate::cli_types::EducationalType::Grammar => "Grammar Lesson",
+        crate::cli_types::EducationalType::Vocabulary => "Vocabulary Building",
+        crate::cli_types::EducationalType::Literature => "Literature Analysis",
+        crate::cli_types::EducationalType::History => "History Lesson",
+        crate::cli_types::EducationalType::Science => "Science Concepts",
+        crate::cli_types::EducationalType::Mathematics => "Mathematics",
+        crate::cli_types::EducationalType::Arts => "Creative Arts",
+        crate::cli_types::EducationalType::General => "General Education",
+    };
+    
+    let audience_name = match audience {
+        crate::cli_types::EducationalAudience::Preschool => "Preschoolers (Ages 3-5)",
+        crate::cli_types::EducationalAudience::Elementary => "Elementary Students (Ages 6-11)",
+        crate::cli_types::EducationalAudience::MiddleSchool => "Middle School Students (Ages 12-14)",
+        crate::cli_types::EducationalAudience::HighSchool => "High School Students (Ages 15-18)",
+        crate::cli_types::EducationalAudience::College => "College Students (18+)",
+        crate::cli_types::EducationalAudience::Adult => "Adult Learners",
+        crate::cli_types::EducationalAudience::Professional => "Professional Development",
+        crate::cli_types::EducationalAudience::Senior => "Senior Learners (65+)",
+        crate::cli_types::EducationalAudience::All => "All Audiences",
+    };
+    
+    let target_sections = match length {
+        crate::cli_types::EducationalLength::QuickLesson => 3,      // 5-15 min lesson
+        crate::cli_types::EducationalLength::StandardLesson => 5,  // 15-45 min lesson
+        crate::cli_types::EducationalLength::ExtendedLesson => 8,  // 45-90 min lesson
+        crate::cli_types::EducationalLength::CourseModule => 12,   // Multi-session course
+        crate::cli_types::EducationalLength::FullCourse => 20, // Full curriculum
+    };
+    
+    println!("📚 Creating {} lesson on: {}", edu_type_name, topic);
+    println!("👥 Target audience: {}", audience_name);
+    println!("📖 Lesson sections: {}", target_sections);
+    println!();
+    
+    // Create the content
+    let mut content = Content::new_document(
+        format!("{} - {}", edu_type_name, topic),
+        "Pundit AI".to_string(),
+        "Educational".to_string(),
+        format!("A comprehensive {} lesson covering {} designed for {}.", edu_type_name.to_lowercase(), topic, audience_name.to_lowercase()),
+        target_sections.max(3),
+        crate::content::DocumentFormat::Educational,
+        model.clone(),
+    );
+    
+    content.content_type = ContentType::EducationalLesson;
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    println!("🏗️ Generating educational content...");
+    
+    let progress_bar = ProgressBar::new(target_sections as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} sections ({percent}%)")
+        .unwrap()
+        .progress_chars("#>-"));
+    
+    for section_num in 1..=target_sections {
+        progress_bar.set_message(format!("Creating lesson section {}", section_num));
+        
+        if let Err(e) = write_educational_section(&client, &model, &mut content, section_num, &topic, &edu_type, &audience, &progress_bar).await {
+            println!("\n❌ Error writing section {}: {}", section_num, e);
+            break;
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Educational content complete!");
+    
+    // Save the content
+    let filename = output.unwrap_or_else(|| {
+        format!("{}_lesson_{}.txt", 
+            topic.replace(" ", "_").to_lowercase(),
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+    });
+    
+    let content_text = content.to_text();
+    fs::write(&filename, content_text)?;
+    
+    println!("\n✅ Educational lesson saved to: {}", filename);
+    println!("📚 Total sections: {}", content.sections.len());
+    println!("📄 Total words: {}", content.metadata.current_word_count);
+    
+    Ok(())
+}
+
+async fn write_childrens_book(
+    book_type: crate::cli_types::ChildrensBookType,
+    concept: String,
+    age_group: crate::cli_types::ChildrensAgeGroup,
+    length: crate::cli_types::ChildrensBookLength,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("👶 Pundit - Children's Book Creator").bold().yellow());
+    println!("═══════════════════════════════════════");
+    println!();
+    
+    let book_type_name = match book_type {
+        crate::cli_types::ChildrensBookType::PictureBook => "Picture Book",
+        crate::cli_types::ChildrensBookType::EarlyReader => "Early Reader",
+        crate::cli_types::ChildrensBookType::ChapterBook => "Chapter Book",
+        crate::cli_types::ChildrensBookType::MiddleGrade => "Middle Grade",
+        crate::cli_types::ChildrensBookType::YoungAdult => "Young Adult",
+        crate::cli_types::ChildrensBookType::Educational => "Educational Book",
+        crate::cli_types::ChildrensBookType::Bedtime => "Bedtime Story",
+        crate::cli_types::ChildrensBookType::Adventure => "Adventure Book",
+        crate::cli_types::ChildrensBookType::Fantasy => "Fantasy Book",
+        crate::cli_types::ChildrensBookType::Realistic => "Realistic Fiction",
+    };
+    
+    let age_group_name = match age_group {
+        crate::cli_types::ChildrensAgeGroup::Toddler => "Toddlers (1-3 years)",
+        crate::cli_types::ChildrensAgeGroup::Preschool => "Preschoolers (3-5 years)",
+        crate::cli_types::ChildrensAgeGroup::Kindergarten => "Kindergarteners (5-6 years)",
+        crate::cli_types::ChildrensAgeGroup::EarlyElementary => "Early Elementary (6-8 years)",
+        crate::cli_types::ChildrensAgeGroup::Elementary => "Elementary (8-12 years)",
+        crate::cli_types::ChildrensAgeGroup::MiddleGrade => "Middle Grade (10-14 years)",
+        crate::cli_types::ChildrensAgeGroup::YoungAdult => "Young Adult (12+ years)",
+    };
+    
+    let target_chapters = match length {
+        crate::cli_types::ChildrensBookLength::Board => 1,    // Very short for toddlers
+        crate::cli_types::ChildrensBookLength::Picture => 3,   // Picture book
+        crate::cli_types::ChildrensBookLength::Early => 8,    // Early reader
+        crate::cli_types::ChildrensBookLength::Chapter => 15,  // Chapter book
+        crate::cli_types::ChildrensBookLength::Middle => 25,  // Middle grade
+        crate::cli_types::ChildrensBookLength::Young => 35,   // Young adult
+    };
+    
+    println!("📖 Creating {} about: {}", book_type_name, concept);
+    println!("🎂 Target age: {}", age_group_name);
+    println!("📚 Chapters: {}", target_chapters);
+    println!();
+    
+    // Create the content
+    let mut content = Content::new_book(
+        format!("{} - {}", book_type_name, concept),
+        "Pundit AI".to_string(),
+        "Children's Fiction".to_string(),
+        "Age-appropriate".to_string(),
+        format!("A delightful {} story about {} designed for {}.", book_type_name.to_lowercase(), concept, age_group_name.to_lowercase()),
+        format!("{} chapters", target_chapters),
+        Some(target_chapters * 500), // Estimate word count
+        target_chapters,
+        model.clone(),
+    );
+    
+    content.content_type = ContentType::ChildrensBook;
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    println!("✨ Creating magical children's content...");
+    
+    let progress_bar = ProgressBar::new(target_chapters as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({percent}%)")
+        .unwrap()
+        .progress_chars("#>-"));
+    
+    for chapter_num in 1..=target_chapters {
+        progress_bar.set_message(format!("Writing chapter {}", chapter_num));
+        
+        if let Err(e) = write_childrens_chapter(&client, &model, &mut content, chapter_num, &concept, &book_type, &age_group, &progress_bar).await {
+            println!("\n❌ Error writing chapter {}: {}", chapter_num, e);
+            break;
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Children's book complete!");
+    
+    // Save the content
+    let filename = output.unwrap_or_else(|| {
+        format!("{}_book_{}.txt", 
+            concept.replace(" ", "_").to_lowercase(),
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+    });
+    
+    let content_text = content.to_text();
+    fs::write(&filename, content_text)?;
+    
+    println!("\n✅ Children's book saved to: {}", filename);
+    println!("📚 Total chapters: {}", content.sections.len());
+    println!("📄 Total words: {}", content.metadata.current_word_count);
+    println!("🎨 Remember: This book includes illustration suggestions marked with 🎨");
+    
+    Ok(())
+}
+
+// Helper functions for new content types
+async fn write_dictionary_section(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    section_num: usize,
+    topic: &str,
+    dict_type: &crate::cli_types::DictionaryType,
+    entries_per_section: usize,
+    letter_range: &str,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let dict_style = match dict_type {
+        crate::cli_types::DictionaryType::Etymological => "Include word origins and historical development",
+        crate::cli_types::DictionaryType::Technical => "Focus on precise technical definitions",
+        crate::cli_types::DictionaryType::Slang => "Include informal usage and cultural context",
+        crate::cli_types::DictionaryType::Historical => "Include historical usage examples",
+        crate::cli_types::DictionaryType::Bilingual => "Include translations and cross-language context",
+        _ => "Standard dictionary format with clear definitions",
+    };
+    
+    let section_title = format!("Entries {}", letter_range);
+    let mut section = Section::new(section_num, section_title, String::new(), SectionType::Section);
+    
+    let prompt = format!(
+        "Create {} dictionary entries for words related to '{}' starting with letters {}. 
+        Style: {}
+        
+        Format each entry as:
+        WORD: [word]
+        DEFINITION: [clear, concise definition]
+        ETYMOLOGY: [word origin and development - if applicable]
+        
+        Make entries informative and educational. Focus on {} terminology.",
+        entries_per_section, topic, letter_range, dict_style, topic
+    );
+    
+    let section_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, 2000, 0.8).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, 2000, 0.8).await?
+        }
+    };
+    
+    section.set_content(section_content);
+    content.add_section(section);
+    
+    Ok(())
+}
+
+async fn write_educational_section(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    section_num: usize,
+    topic: &str,
+    edu_type: &crate::cli_types::EducationalType,
+    audience: &crate::cli_types::EducationalAudience,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let learning_style = match edu_type {
+        crate::cli_types::EducationalType::LanguageLearning => "Interactive language exercises with practical examples",
+        crate::cli_types::EducationalType::Mathematics => "Step-by-step problem solving with clear explanations",
+        crate::cli_types::EducationalType::Science => "Hands-on experiments and real-world applications",
+        crate::cli_types::EducationalType::History => "Engaging narratives with timeline context",
+        crate::cli_types::EducationalType::Arts => "Creative exercises and cultural appreciation",
+        _ => "Clear explanations with practical examples and activities",
+    };
+    
+    let audience_level = match audience {
+        crate::cli_types::EducationalAudience::Preschool => "simple language appropriate for preschoolers ages 3-5",
+        crate::cli_types::EducationalAudience::Elementary => "clear explanations for elementary students ages 6-11",
+        crate::cli_types::EducationalAudience::MiddleSchool => "engaging content for middle school students ages 12-14",
+        crate::cli_types::EducationalAudience::HighSchool => "comprehensive content for high school students ages 15-18",
+        crate::cli_types::EducationalAudience::College => "detailed content for college-level learners",
+        crate::cli_types::EducationalAudience::Adult => "practical content for adult learners",
+        crate::cli_types::EducationalAudience::Professional => "professional development content",
+        crate::cli_types::EducationalAudience::Senior => "accessible content for senior learners",
+        crate::cli_types::EducationalAudience::All => "content appropriate for all audiences",
+    };
+    
+    let section_title = format!("Lesson {}: {}", section_num, get_section_topic(topic, section_num));
+    let mut section = Section::new(section_num, section_title, String::new(), SectionType::Section);
+    
+    let prompt = format!(
+        "Create educational content for lesson section {} about '{}'. 
+        
+        Learning approach: {}
+        Target audience: {}
+        
+        Structure the lesson with:
+        OBJECTIVE: [clear learning goal for this section]
+        CONTENT: [main educational content with examples]
+        ACTIVITY: [hands-on exercise or practice]
+        ASSESSMENT: [quick check for understanding]
+        
+        Make it engaging, educational, and appropriate for the target audience.",
+        section_num, topic, learning_style, audience_level
+    );
+    
+    let section_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, 2000, 0.8).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, 2000, 0.8).await?
+        }
+    };
+    
+    section.set_content(section_content);
+    content.add_section(section);
+    
+    Ok(())
+}
+
+async fn write_childrens_chapter(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    chapter_num: usize,
+    concept: &str,
+    book_type: &crate::cli_types::ChildrensBookType,
+    age_group: &crate::cli_types::ChildrensAgeGroup,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let writing_style = match age_group {
+        crate::cli_types::ChildrensAgeGroup::Toddler => "very simple words, repetitive phrases, basic concepts",
+        crate::cli_types::ChildrensAgeGroup::Preschool => "simple sentences, fun sounds, basic vocabulary",
+        crate::cli_types::ChildrensAgeGroup::Kindergarten => "easy-to-read words, basic sentence structure",
+        crate::cli_types::ChildrensAgeGroup::EarlyElementary => "easy-to-read words, short sentences, clear narrative",
+        crate::cli_types::ChildrensAgeGroup::Elementary => "age-appropriate vocabulary, engaging dialogue, descriptive but simple",
+        crate::cli_types::ChildrensAgeGroup::MiddleGrade => "more complex vocabulary, character development, longer passages",
+        crate::cli_types::ChildrensAgeGroup::YoungAdult => "sophisticated themes, complex characters, mature vocabulary",
+    };
+    
+    let book_style = match book_type {
+        crate::cli_types::ChildrensBookType::PictureBook => "Include illustration descriptions with ILLUSTRATION: markers",
+        crate::cli_types::ChildrensBookType::Bedtime => "Gentle, calming tone perfect for bedtime reading",
+        crate::cli_types::ChildrensBookType::Adventure => "Exciting action and exploration while staying age-appropriate",
+        crate::cli_types::ChildrensBookType::Educational => "Weave learning elements naturally into the story",
+        crate::cli_types::ChildrensBookType::Fantasy => "Magical elements that spark imagination",
+        _ => "Engaging storytelling appropriate for children",
+    };
+    
+    let chapter_title = get_chapter_title(concept, chapter_num, content.sections.len());
+    let mut chapter = Section::new(chapter_num, chapter_title, String::new(), SectionType::Chapter);
+    
+    let context = content.get_context_for_next_section();
+    
+    let prompt = format!(
+        "Write chapter {} of a children's book about '{}'. 
+        
+        Writing style: {}
+        Book approach: {}
+        
+        {}
+        
+        Make the chapter:
+        - Age-appropriate and engaging
+        - Include dialogue with DIALOGUE: markers when characters speak
+        - Include illustration suggestions with ILLUSTRATION: markers for picture descriptions
+        - Have a clear beginning, middle, and end for this chapter
+        - Advance the overall story while being complete on its own
+        - Use positive, encouraging themes
+        
+        Write approximately 300-800 words depending on the target age group.",
+        chapter_num, concept, writing_style, book_style, context
+    );
+    
+    let chapter_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, 3000, 0.9).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, 3000, 0.9).await?
+        }
+    };
+    
+    chapter.set_content(chapter_content);
+    content.add_section(chapter);
+    
+    Ok(())
+}
+
+fn get_section_topic(main_topic: &str, section_num: usize) -> String {
+    let topics = vec![
+        format!("Introduction to {}", main_topic),
+        format!("Fundamentals of {}", main_topic),
+        format!("Exploring {}", main_topic),
+        format!("Practical Applications of {}", main_topic),
+        format!("Advanced Concepts in {}", main_topic),
+        format!("Real-world Examples of {}", main_topic),
+        format!("Common Challenges with {}", main_topic),
+        format!("Best Practices for {}", main_topic),
+        format!("Future Directions in {}", main_topic),
+        format!("Mastering {}", main_topic),
+    ];
+    
+    if section_num <= topics.len() {
+        topics[section_num - 1].clone()
+    } else {
+        format!("Advanced Topics in {} (Part {})", main_topic, section_num - topics.len())
+    }
+}
+
+fn get_chapter_title(concept: &str, chapter_num: usize, total_chapters: usize) -> String {
+    match chapter_num {
+        1 => format!("The Beginning of {}", concept),
+        n if n == total_chapters => format!("The Resolution of {}", concept),
+        n if n == total_chapters - 1 => format!("The Climax of {}", concept),
+        n if n <= 3 => format!("Meeting {}", concept),
+        n if n <= total_chapters / 2 => format!("Adventures with {}", concept),
+        _ => format!("Challenges and {}", concept),
+    }
+}
+
+// Helper function for consistent model selection across all interactive functions
+fn interactive_model_selection(content_type: &str, estimated_length: &str) -> Result<(bool, String)> {
+    println!("\n🤖 Model Selection:");
+    let model_options = vec![
+        "🏠 Local models (Ollama) - No API key needed, runs offline",
+        "☁️ Cloud models (HuggingFace) - Requires API key or limited free tier",
+        "← Back",
+    ];
+    
+    let model_type_idx = Select::new()
+        .with_prompt("Which type of model would you like to use?")
+        .items(&model_options)
+        .default(0) // Default to local
+        .interact()?;
+    
+    if model_type_idx == model_options.len() - 1 {
+        return Err(anyhow::anyhow!("Back selected")); // Signal to go back
+    }
+    
+    let (use_local, model) = if model_type_idx == 0 {
+        // Local models - use same logic as narrate_mode
+        let recommended_local = match estimated_length {
+            length if length.contains("Short") || length.contains("Quick") => "llama3.2:1b",
+            length if length.contains("Medium") || length.contains("Standard") => "llama3.2",
+            length if length.contains("Long") || length.contains("Extended") || length.contains("Large") => "llama3.1:8b",
+            _ => "llama3.2", // Default
+        };
+        
+        println!("\n🏠 Local Model Options:");
+        println!("   Recommended: {} for {} content", recommended_local, estimated_length);
+        println!("   Note: Make sure you have Ollama installed and the model downloaded");
+        println!("   To install: ollama pull {}", recommended_local);
+        
+        let use_recommended_local = Confirm::new()
+            .with_prompt(&format!("Use recommended local model ({}) for this {} {}?", recommended_local, estimated_length, content_type))
+            .default(true)
+            .interact()?;
+        
+        let local_model = if use_recommended_local {
+            recommended_local.to_string()
+        } else {
+            println!("\n📋 Available Ollama models:");
+            println!("   Fast: llama3.2:1b, gemma2:2b, phi3:mini");
+            println!("   Balanced: llama3.2, mistral:7b, qwen2:7b");
+            println!("   High Quality: llama3.1:8b, gemma2:9b, codellama:7b");
+            
+            Input::new()
+                .with_prompt("Enter Ollama model name")
+                .with_initial_text(recommended_local)
+                .interact_text()?
+        };
+        
+        (true, local_model)
+    } else {
+        // Cloud models
+        let recommended_cloud = match estimated_length {
+            length if length.contains("Short") || length.contains("Quick") => "distilgpt2",
+            length if length.contains("Long") || length.contains("Extended") || length.contains("Large") => "gpt2-medium",
+            _ => "gpt2", // Default
+        };
+        
+        println!("\n☁️ Cloud Model Options:");
+        println!("   Recommended: {} for {} content", recommended_cloud, estimated_length);
+        println!("   Note: Some models work without API key, others may require authentication");
+        
+        let use_recommended_cloud = Confirm::new()
+            .with_prompt(&format!("Use recommended cloud model ({}) for this {} {}?", recommended_cloud, estimated_length, content_type))
+            .default(true)
+            .interact()?;
+        
+        let cloud_model = if use_recommended_cloud {
+            recommended_cloud.to_string()
+        } else {
+            Input::new()
+                .with_prompt("Enter HuggingFace model name")
+                .with_initial_text(recommended_cloud)
+                .interact_text()?
+        };
+        
+        (false, cloud_model)
+    };
+    
+    Ok((use_local, model))
+}
+
+// Educational Book Creation - comprehensive system for educational content
+async fn create_educational_book() -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    'educational_book_setup: loop {
+        println!("{}", console::style("📚 Pundit - Educational Book Creator").bold().green());
+        println!("═══════════════════════════════════════");
+        println!();
+        println!("Create comprehensive educational books including:");
+        println!("• Language Learning Books with lessons and exercises");
+        println!("• Subject Textbooks (History, Science, Math, etc.)");
+        println!("• Course Materials with structured curriculum");
+        println!("• Training Manuals and Professional Development");
+        println!();
+        
+        // Educational book type selection
+        'type_selection: loop {
+            let educational_types = vec![
+                "📖 Language Learning Book - Learn a new language with structured lessons",
+                "🔬 Science Textbook - Physics, Chemistry, Biology, or other sciences", 
+                "📜 History Textbook - Historical events, periods, and analysis",
+                "🧮 Mathematics Textbook - Math concepts from basic to advanced",
+                "💼 Professional Training Manual - Skills and procedures for work",
+                "🎓 Course Curriculum - Complete course with modules and assessments",
+                "🗣️ Language Translation Guide - Between two specific languages",
+                "📋 Study Guide - Exam prep and review materials",
+                "🔤 Grammar & Writing Book - Language mechanics and composition",
+                "🌍 Cultural Studies Book - Explore cultures and societies",
+                "← Back to main menu"
+            ];
+            
+            let type_idx = Select::new()
+                .with_prompt("What type of educational book would you like to create?")
+                .items(&educational_types)
+                .default(0)
+                .interact()?;
+            
+            if type_idx == educational_types.len() - 1 {
+                return Ok(()); // Back to main menu
+            }
+            
+            match type_idx {
+                0 => return create_language_learning_book().await,
+                1 => return create_science_textbook().await,
+                2 => return create_history_textbook().await,
+                3 => return create_mathematics_textbook().await,
+                4 => return create_training_manual().await,
+                5 => return create_course_curriculum().await,
+                6 => return create_translation_guide().await,
+                7 => return create_study_guide().await,
+                8 => return create_grammar_book().await,
+                9 => return create_cultural_studies_book().await,
+                _ => continue 'type_selection,
+            }
+        }
+    }
+}
+
+// Language Learning Book Creation
+async fn create_language_learning_book() -> Result<()> {
+    'language_book: loop {
+        println!("\n📖 Creating Language Learning Book");
+        println!("═══════════════════════════════════");
+        
+        // Target language selection
+        let languages = vec![
+            "Spanish", "French", "German", "Italian", "Portuguese", "Russian",
+            "Chinese (Mandarin)", "Japanese", "Korean", "Arabic", "Hindi", 
+            "Dutch", "Swedish", "Norwegian", "Polish", "Czech", "Turkish",
+            "Greek", "Hebrew", "Thai", "Vietnamese", "Indonesian", "Swahili",
+            "Other (specify)", "← Back"
+        ];
+        
+        let lang_idx = Select::new()
+            .with_prompt("What language do you want to teach?")
+            .items(&languages)
+            .default(0)
+            .interact()?;
+        
+        if lang_idx == languages.len() - 1 {
+            return Ok(()); // Back
+        }
+        
+        let target_language = if lang_idx == languages.len() - 2 {
+            Input::new()
+                .with_prompt("Enter the language name")
+                .interact_text()?
+        } else {
+            languages[lang_idx].to_string()
+        };
+        
+        // Difficulty level
+        let levels = vec![
+            "Beginner (A1) - Absolute basics",
+            "Elementary (A2) - Basic communication",
+            "Intermediate (B1) - Everyday conversations", 
+            "Upper Intermediate (B2) - Complex topics",
+            "Advanced (C1) - Fluency development",
+            "Proficient (C2) - Near-native mastery",
+            "← Back"
+        ];
+        
+        let level_idx = Select::new()
+            .with_prompt("What difficulty level should the book target?")
+            .items(&levels)
+            .default(0)
+            .interact()?;
+        
+        if level_idx == levels.len() - 1 {
+            continue 'language_book;
+        }
+        
+        let difficulty_level = match level_idx {
+            0 => "Beginner (A1)",
+            1 => "Elementary (A2)", 
+            2 => "Intermediate (B1)",
+            3 => "Upper Intermediate (B2)",
+            4 => "Advanced (C1)",
+            5 => "Proficient (C2)",
+            _ => "Beginner (A1)",
+        };
+        
+        // Book focus
+        let focuses = vec![
+            "🗣️ Conversation & Speaking - Practical communication skills",
+            "📚 Grammar & Structure - Language rules and patterns",
+            "📖 Reading & Comprehension - Text understanding skills",
+            "✍️ Writing & Composition - Written expression skills",
+            "👂 Listening & Pronunciation - Audio comprehension and accent",
+            "🌍 Culture & Context - Cultural understanding alongside language",
+            "💼 Business Language - Professional and workplace communication",
+            "🎓 Academic Language - Formal and educational contexts",
+            "← Back"
+        ];
+        
+        let focus_idx = Select::new()
+            .with_prompt("What should be the primary focus of the book?")
+            .items(&focuses)
+            .default(0)
+            .interact()?;
+        
+        if focus_idx == focuses.len() - 1 {
+            continue 'language_book;
+        }
+        
+        let focus_area = match focus_idx {
+            0 => "Conversation",
+            1 => "Grammar",
+            2 => "Reading",
+            3 => "Writing",
+            4 => "Listening",
+            5 => "Culture",
+            6 => "Business",
+            7 => "Academic",
+            _ => "Conversation",
+        };
+        
+        // Book length
+        let lengths = vec![
+            "Short Course (20-30 lessons, ~40,000 words)",
+            "Standard Course (40-50 lessons, ~80,000 words)",
+            "Comprehensive Course (60-80 lessons, ~120,000 words)",
+            "Complete Program (100+ lessons, ~200,000 words)",
+            "← Back"
+        ];
+        
+        let length_idx = Select::new()
+            .with_prompt("How comprehensive should the language course be?")
+            .items(&lengths)
+            .default(1)
+            .interact()?;
+        
+        if length_idx == lengths.len() - 1 {
+            continue 'language_book;
+        }
+        
+        let (lesson_count, book_size) = match length_idx {
+            0 => (25, BookSize::Medium),
+            1 => (45, BookSize::Large), 
+            2 => (70, BookSize::VeryLarge),
+            3 => (120, BookSize::Unlimited),
+            _ => (45, BookSize::Large),
+        };
+        
+        // Model selection
+        let length_desc = match length_idx {
+            0 => "Medium",
+            1 => "Large",
+            2 => "Large", 
+            3 => "Extended",
+            _ => "Large",
+        };
+        
+        let (use_local, model) = match interactive_model_selection("language learning book", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue 'language_book,
+        };
+        
+        println!("\n✨ Creating {} {} Language Learning Book", target_language, difficulty_level);
+        println!("📚 Focus: {} skills", focus_area);
+        println!("📖 Lessons: {}", lesson_count);
+        println!("🤖 Model: {}", model);
+        println!();
+        
+        // Create the educational book with language learning focus
+        return write_language_learning_book(target_language, difficulty_level.to_string(), focus_area.to_string(), lesson_count, book_size, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+    }
+}
+
+// Science Textbook Creation  
+async fn create_science_textbook() -> Result<()> {
+    'science_book: loop {
+        println!("\n🔬 Creating Science Textbook");
+        println!("═══════════════════════════════");
+        
+        // Science subject selection
+        let subjects = vec![
+            "Physics - Mechanics, Thermodynamics, Electromagnetism",
+            "Chemistry - Organic, Inorganic, Physical Chemistry",
+            "Biology - Cell Biology, Genetics, Evolution, Ecology", 
+            "Earth Science - Geology, Meteorology, Oceanography",
+            "Astronomy - Solar System, Stars, Galaxies, Cosmology",
+            "Environmental Science - Ecosystems, Climate, Sustainability",
+            "Computer Science - Algorithms, Programming, Data Structures",
+            "Engineering - Mechanical, Electrical, Civil principles",
+            "Medical Science - Anatomy, Physiology, Health",
+            "Other Science (specify)", "← Back"
+        ];
+        
+        let subject_idx = Select::new()
+            .with_prompt("Which science subject should the textbook cover?")
+            .items(&subjects)
+            .default(0)
+            .interact()?;
+        
+        if subject_idx == subjects.len() - 1 {
+            return Ok(());
+        }
+        
+        let science_subject = if subject_idx == subjects.len() - 2 {
+            Input::new()
+                .with_prompt("Enter the science subject")
+                .interact_text()?
+        } else {
+            subjects[subject_idx].split(" - ").next().unwrap().to_string()
+        };
+        
+        // Education level
+        let levels = vec![
+            "Elementary (Ages 8-12) - Basic concepts and experiments",
+            "Middle School (Ages 12-15) - Foundational principles", 
+            "High School (Ages 15-18) - Advanced concepts and applications",
+            "College Introductory - University-level fundamentals",
+            "Advanced Undergraduate - Specialized topics and research",
+            "Graduate Level - Research-focused and theoretical",
+            "← Back"
+        ];
+        
+        let level_idx = Select::new()
+            .with_prompt("What education level should this textbook target?")
+            .items(&levels)
+            .default(2)
+            .interact()?;
+        
+        if level_idx == levels.len() - 1 {
+            continue 'science_book;
+        }
+        
+        let education_level = match level_idx {
+            0 => "Elementary",
+            1 => "Middle School",
+            2 => "High School", 
+            3 => "College Introductory",
+            4 => "Advanced Undergraduate",
+            5 => "Graduate Level",
+            _ => "High School",
+        };
+        
+        // Textbook approach
+        let approaches = vec![
+            "📊 Theoretical Focus - Concepts, laws, and principles",
+            "🧪 Experimental Focus - Labs, experiments, and practical work",
+            "🔗 Applied Focus - Real-world applications and case studies",
+            "📈 Problem-Solving Focus - Mathematics and analytical thinking",
+            "🎯 Exam Preparation - Test prep with practice questions",
+            "🌟 Conceptual Understanding - Visual and intuitive explanations",
+            "← Back"
+        ];
+        
+        let approach_idx = Select::new()
+            .with_prompt("What should be the primary teaching approach?")
+            .items(&approaches)
+            .default(2)
+            .interact()?;
+        
+        if approach_idx == approaches.len() - 1 {
+            continue 'science_book;
+        }
+        
+        let teaching_approach = match approach_idx {
+            0 => "Theoretical",
+            1 => "Experimental",
+            2 => "Applied", 
+            3 => "Problem-Solving",
+            4 => "Exam Prep",
+            5 => "Conceptual",
+            _ => "Applied",
+        };
+        
+        // Book size
+        let sizes = vec![
+            "Concise (15-20 chapters, ~60,000 words)",
+            "Standard (25-30 chapters, ~100,000 words)", 
+            "Comprehensive (35-45 chapters, ~150,000 words)",
+            "Complete Reference (50+ chapters, ~250,000 words)",
+            "← Back"
+        ];
+        
+        let size_idx = Select::new()
+            .with_prompt("How comprehensive should the textbook be?")
+            .items(&sizes)
+            .default(1)
+            .interact()?;
+        
+        if size_idx == sizes.len() - 1 {
+            continue 'science_book;
+        }
+        
+        let (chapter_count, book_size) = match size_idx {
+            0 => (18, BookSize::Medium),
+            1 => (28, BookSize::Large),
+            2 => (40, BookSize::VeryLarge),
+            3 => (60, BookSize::Unlimited),
+            _ => (28, BookSize::Large),
+        };
+        
+        // Model selection
+        let length_desc = match size_idx {
+            0 => "Medium",
+            1 => "Large",
+            2 => "Large",
+            3 => "Extended", 
+            _ => "Large",
+        };
+        
+        let (use_local, model) = match interactive_model_selection("science textbook", length_desc) {
+            Ok((use_local, model)) => (use_local, model),
+            Err(_) => continue 'science_book,
+        };
+        
+        println!("\n🔬 Creating {} Science Textbook", science_subject);
+        println!("🎓 Level: {}", education_level);
+        println!("📚 Approach: {} focus", teaching_approach);
+        println!("📖 Chapters: {}", chapter_count);
+        println!("🤖 Model: {}", model);
+        println!();
+        
+        // Create the science textbook
+        return write_science_textbook(science_subject, education_level.to_string(), teaching_approach.to_string(), chapter_count, book_size, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+    }
+}
+
+// Placeholder functions for other educational book types
+async fn create_history_textbook() -> Result<()> {
+    println!("🚧 History textbook creation coming soon!");
+    Ok(())
+}
+
+async fn create_mathematics_textbook() -> Result<()> {
+    println!("🚧 Mathematics textbook creation coming soon!");
+    Ok(())
+}
+
+async fn create_training_manual() -> Result<()> {
+    println!("🚧 Training manual creation coming soon!");
+    Ok(())
+}
+
+async fn create_course_curriculum() -> Result<()> {
+    println!("🚧 Course curriculum creation coming soon!");
+    Ok(())
+}
+
+async fn create_translation_guide() -> Result<()> {
+    println!("🚧 Translation guide creation coming soon!");
+    Ok(())
+}
+
+async fn create_study_guide() -> Result<()> {
+    println!("🚧 Study guide creation coming soon!");
+    Ok(())
+}
+
+async fn create_grammar_book() -> Result<()> {
+    println!("🚧 Grammar book creation coming soon!");
+    Ok(())
+}
+
+async fn create_cultural_studies_book() -> Result<()> {
+    println!("🚧 Cultural studies book creation coming soon!");
+    Ok(())
+}
+
+// Writing functions for educational books
+async fn write_language_learning_book(
+    target_language: String,
+    difficulty_level: String, 
+    focus_area: String,
+    lesson_count: usize,
+    _book_size: BookSize,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("📖 Creating Language Learning Book").bold().green());
+    println!("═══════════════════════════════════════");
+    println!();
+    
+    println!("📚 Language: {}", target_language);
+    println!("🎯 Level: {}", difficulty_level);
+    println!("💬 Focus: {}", focus_area);
+    println!("📖 Lessons: {}", lesson_count);
+    println!();
+    
+    // Create the content structure
+    let mut content = Content::new_book(
+        format!("{} Language Learning Book - {}", target_language, difficulty_level),
+        "Pundit AI".to_string(),
+        "Educational".to_string(),
+        focus_area.clone(),
+        format!("A comprehensive {} language learning book focusing on {} skills for {} level learners.", target_language, focus_area.to_lowercase(), difficulty_level),
+        format!("{} lessons", lesson_count),
+        Some(lesson_count * 1500), // Estimate word count per lesson
+        lesson_count,
+        model.clone(),
+    );
+    
+    content.content_type = ContentType::Book; // Educational book
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    println!("🏗️ Generating language learning lessons...");
+    
+    let progress_bar = ProgressBar::new(lesson_count as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} lessons ({percent}%)")
+        .unwrap()
+        .progress_chars("#>-"));
+    
+    for lesson_num in 1..=lesson_count {
+        progress_bar.set_message(format!("Creating lesson {}", lesson_num));
+        
+        if let Err(e) = write_language_lesson(&client, &model, &mut content, lesson_num, &target_language, &difficulty_level, &focus_area, lesson_count, &progress_bar).await {
+            println!("\n❌ Error writing lesson {}: {}", lesson_num, e);
+            break;
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Language learning book complete!");
+    
+    // Save the content
+    let filename = output.unwrap_or_else(|| {
+        format!("{}_{}_learning_book_{}.txt", 
+            target_language.replace(" ", "_").to_lowercase(),
+            focus_area.replace(" ", "_").to_lowercase(),
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+    });
+    
+    let content_text = content.to_text();
+    fs::write(&filename, content_text)?;
+    
+    println!("\n✅ Language learning book saved to: {}", filename);
+    println!("📚 Total lessons: {}", content.sections.len());
+    println!("📄 Total words: {}", content.metadata.current_word_count);
+    
+    Ok(())
+}
+
+async fn write_science_textbook(
+    science_subject: String,
+    education_level: String,
+    teaching_approach: String,
+    chapter_count: usize,
+    _book_size: BookSize,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("🔬 Creating Science Textbook").bold().blue());
+    println!("═══════════════════════════════════════");
+    println!();
+    
+    println!("🔬 Subject: {}", science_subject);
+    println!("🎓 Level: {}", education_level);
+    println!("📚 Approach: {}", teaching_approach);
+    println!("📖 Chapters: {}", chapter_count);
+    println!();
+    
+    // Create the content structure
+    let mut content = Content::new_book(
+        format!("{} Textbook - {}", science_subject, education_level),
+        "Pundit AI".to_string(),
+        "Educational".to_string(),
+        teaching_approach.clone(),
+        format!("A comprehensive {} textbook for {} students with a {} approach.", science_subject, education_level.to_lowercase(), teaching_approach.to_lowercase()),
+        format!("{} chapters", chapter_count),
+        Some(chapter_count * 3000), // Estimate word count per chapter
+        chapter_count,
+        model.clone(),
+    );
+    
+    content.content_type = ContentType::Book; // Educational book
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    println!("🏗️ Generating science textbook chapters...");
+    
+    let progress_bar = ProgressBar::new(chapter_count as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({percent}%)")
+        .unwrap()
+        .progress_chars("#>-"));
+    
+    for chapter_num in 1..=chapter_count {
+        progress_bar.set_message(format!("Creating chapter {}", chapter_num));
+        
+        if let Err(e) = write_science_chapter(&client, &model, &mut content, chapter_num, &science_subject, &education_level, &teaching_approach, chapter_count, &progress_bar).await {
+            println!("\n❌ Error writing chapter {}: {}", chapter_num, e);
+            break;
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Science textbook complete!");
+    
+    // Save the content
+    let filename = output.unwrap_or_else(|| {
+        format!("{}_textbook_{}_{}.txt", 
+            science_subject.replace(" ", "_").to_lowercase(),
+            education_level.replace(" ", "_").to_lowercase(),
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"))
+    });
+    
+    let content_text = content.to_text();
+    fs::write(&filename, content_text)?;
+    
+    println!("\n✅ Science textbook saved to: {}", filename);
+    println!("📚 Total chapters: {}", content.sections.len());
+    println!("📄 Total words: {}", content.metadata.current_word_count);
+    
+    Ok(())
+}
+
+// Helper functions for educational content generation
+async fn write_language_lesson(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    lesson_num: usize,
+    target_language: &str,
+    difficulty_level: &str,
+    focus_area: &str,
+    total_lessons: usize,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let lesson_title = format!("Lesson {}: {}", lesson_num, get_language_lesson_title(target_language, focus_area, lesson_num, total_lessons));
+    let mut lesson = Section::new(lesson_num, lesson_title, String::new(), SectionType::Chapter);
+    
+    let context = content.get_context_for_next_section();
+    
+    let prompt = format!(
+        "Create lesson {} of a {} {} language learning book focusing on {} skills.
+        
+        Level: {}
+        Lesson Context: {}
+        
+        Structure the lesson with:
+        
+        LESSON OBJECTIVE: What students will learn in this lesson
+        VOCABULARY: 8-12 key words/phrases with translations and pronunciation guides
+        GRAMMAR POINT: Main grammatical concept (if applicable)
+        DIALOGUE: A practical conversation example using the new vocabulary
+        EXERCISES: 3-4 practice activities
+        CULTURAL NOTE: Brief cultural insight related to the language/topic
+        HOMEWORK: Practice assignments for reinforcement
+        
+        Make the lesson:
+        - Progressive (building on previous lessons)
+        - Interactive with clear examples
+        - Practical for real-world use
+        - Appropriate for {} level learners
+        - Focused on {} skills
+        
+        Write approximately 1200-1800 words.",
+        lesson_num, target_language, difficulty_level, focus_area.to_lowercase(), 
+        difficulty_level, context, difficulty_level, focus_area.to_lowercase()
+    );
+    
+    let lesson_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, 4000, 0.8).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, 4000, 0.8).await?
+        }
+    };
+    
+    lesson.set_content(lesson_content);
+    content.add_section(lesson);
+    
+    Ok(())
+}
+
+async fn write_science_chapter(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    chapter_num: usize,
+    science_subject: &str,
+    education_level: &str,
+    teaching_approach: &str,
+    total_chapters: usize,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let chapter_title = format!("Chapter {}: {}", chapter_num, get_science_chapter_title(science_subject, chapter_num, total_chapters));
+    let mut chapter = Section::new(chapter_num, chapter_title, String::new(), SectionType::Chapter);
+    
+    let context = content.get_context_for_next_section();
+    
+    let approach_guidance = match teaching_approach {
+        "Theoretical" => "Focus on concepts, laws, principles, and theoretical frameworks",
+        "Experimental" => "Include lab procedures, experiments, and hands-on activities",
+        "Applied" => "Emphasize real-world applications, case studies, and practical examples",
+        "Problem-Solving" => "Include mathematical calculations, problem-solving strategies, and analytical thinking",
+        "Exam Prep" => "Include practice questions, test strategies, and exam-focused content",
+        "Conceptual" => "Use visual aids, analogies, and intuitive explanations to build understanding",
+        _ => "Provide clear explanations with examples and applications",
+    };
+    
+    let prompt = format!(
+        "Create chapter {} of a {} textbook for {} students using a {} approach.
+        
+        Chapter Context: {}
+        Teaching Approach: {}
+        
+        Structure the chapter with:
+        
+        CHAPTER OVERVIEW: Brief introduction to the topics covered
+        LEARNING OBJECTIVES: What students will understand after this chapter
+        KEY CONCEPTS: Main ideas and principles (3-5 concepts)
+        DETAILED EXPLANATIONS: Comprehensive coverage of each concept
+        EXAMPLES: Concrete examples and applications
+        PRACTICE PROBLEMS: 5-8 problems or questions (if applicable)
+        CHAPTER SUMMARY: Key takeaways and review points
+        FURTHER READING: Additional resources for deeper study
+        
+        Make the chapter:
+        - Scientifically accurate and current
+        - Appropriate for {} level students
+        - Progressive (building on previous chapters)
+        - {} focused
+        - Engaging with clear explanations
+        
+        Write approximately 2500-3500 words.",
+        chapter_num, science_subject, education_level, teaching_approach.to_lowercase(),
+        context, approach_guidance, education_level, teaching_approach.to_lowercase()
+    );
+    
+    let chapter_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, 5000, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, 5000, 0.7).await?
+        }
+    };
+    
+    chapter.set_content(chapter_content);
+    content.add_section(chapter);
+    
+    Ok(())
+}
+
+fn get_language_lesson_title(target_language: &str, focus_area: &str, lesson_num: usize, total_lessons: usize) -> String {
+    match focus_area {
+        "Conversation" => match lesson_num {
+            1 => format!("Basic Greetings and Introductions in {}", target_language),
+            2 => "Numbers, Time, and Dates".to_string(),
+            3 => "Family and Personal Information".to_string(),
+            4 => "Food and Dining Out".to_string(),
+            5 => "Shopping and Directions".to_string(),
+            n if n <= total_lessons / 3 => format!("Essential {} Conversations", target_language),
+            n if n <= 2 * total_lessons / 3 => "Intermediate Conversational Topics".to_string(),
+            _ => "Advanced Discussion and Fluency".to_string(),
+        },
+        "Grammar" => match lesson_num {
+            1 => format!("{} Alphabet and Basic Sentence Structure", target_language),
+            2 => "Nouns, Articles, and Gender".to_string(),
+            3 => "Present Tense Verbs".to_string(),
+            4 => "Question Formation and Negation".to_string(),
+            5 => "Adjectives and Descriptions".to_string(),
+            n if n <= total_lessons / 3 => "Essential Grammar Rules".to_string(),
+            n if n <= 2 * total_lessons / 3 => "Intermediate Grammar Concepts".to_string(),
+            _ => "Advanced Grammar and Style".to_string(),
+        },
+        "Reading" => match lesson_num {
+            1 => format!("{} Writing System and Basic Words", target_language),
+            2 => "Reading Simple Sentences".to_string(),
+            3 => "Understanding Context and Meaning".to_string(),
+            n if n <= total_lessons / 2 => "Reading Comprehension Skills".to_string(),
+            _ => "Advanced Text Analysis".to_string(),
+        },
+        "Writing" => match lesson_num {
+            1 => format!("Writing in {} Script", target_language),
+            2 => "Basic Sentence Construction".to_string(),
+            3 => "Paragraph Development".to_string(),
+            n if n <= total_lessons / 2 => "Writing Skills and Practice".to_string(),
+            _ => "Advanced Writing Techniques".to_string(),
+        },
+        "Business" => match lesson_num {
+            1 => format!("Professional {} Vocabulary", target_language),
+            2 => "Business Communications".to_string(),
+            3 => "Meetings and Presentations".to_string(),
+            _ => format!("Professional {} Skills", target_language),
+        },
+        _ => format!("{} Language Fundamentals", target_language),
+    }
+}
+
+fn get_science_chapter_title(science_subject: &str, chapter_num: usize, total_chapters: usize) -> String {
+    match science_subject {
+        "Physics" => match chapter_num {
+            1 => "Introduction to Physics and Measurement".to_string(),
+            2 => "Motion in One Dimension".to_string(),
+            3 => "Vectors and Two-Dimensional Motion".to_string(),
+            4 => "Forces and Newton's Laws".to_string(),
+            5 => "Work, Energy, and Power".to_string(),
+            6 => "Momentum and Collisions".to_string(),
+            7 => "Rotational Motion".to_string(),
+            8 => "Gravitation".to_string(),
+            9 => "Waves and Sound".to_string(),
+            10 => "Thermodynamics".to_string(),
+            11 => "Electric Fields and Potential".to_string(),
+            12 => "Current and Circuits".to_string(),
+            n if n <= total_chapters / 2 => "Classical Physics Principles".to_string(),
+            _ => "Modern Physics Concepts".to_string(),
+        },
+        "Chemistry" => match chapter_num {
+            1 => "Atoms, Molecules, and Ions".to_string(),
+            2 => "Chemical Bonding".to_string(),
+            3 => "Stoichiometry".to_string(),
+            4 => "Chemical Reactions".to_string(),
+            5 => "Gases and Gas Laws".to_string(),
+            6 => "Thermochemistry".to_string(),
+            7 => "Atomic Structure and Periodicity".to_string(),
+            8 => "Solutions and Solubility".to_string(),
+            9 => "Acids and Bases".to_string(),
+            10 => "Chemical Equilibrium".to_string(),
+            n if n <= total_chapters / 2 => "General Chemistry Principles".to_string(),
+            _ => "Advanced Chemical Concepts".to_string(),
+        },
+        "Biology" => match chapter_num {
+            1 => "The Chemistry of Life".to_string(),
+            2 => "Cell Structure and Function".to_string(),
+            3 => "Cellular Metabolism".to_string(),
+            4 => "Cell Division and Reproduction".to_string(),
+            5 => "Genetics and Heredity".to_string(),
+            6 => "DNA and Protein Synthesis".to_string(),
+            7 => "Evolution and Natural Selection".to_string(),
+            8 => "Classification of Living Things".to_string(),
+            9 => "Plant Biology".to_string(),
+            10 => "Animal Biology".to_string(),
+            11 => "Ecology and Ecosystems".to_string(),
+            n if n <= total_chapters / 2 => "Cellular and Molecular Biology".to_string(),
+            _ => "Ecology and Environmental Biology".to_string(),
+        },
+        _ => format!("{} Fundamentals", science_subject),
+    }
 }

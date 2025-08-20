@@ -1,6 +1,6 @@
 // CLI types without clap derives to avoid stack overflow
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Genre {
     Fiction,
     NonFiction,
@@ -135,7 +135,7 @@ impl std::fmt::Display for Genre {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum WritingStyle {
     Formal,
     Casual,
@@ -465,4 +465,99 @@ pub enum MeetingLength {
     Extended,
     Comprehensive,
     Detailed,    // Missing variant
+}
+
+// Dictionary types
+#[derive(Clone, Debug)]
+pub enum DictionaryType {
+    Standard,           // Traditional word definitions
+    Etymological,       // Word origins and evolution
+    Thematic,          // Words grouped by themes
+    Bilingual,         // Two-language dictionary
+    Technical,         // Specialized terminology
+    Slang,             // Informal language
+    Historical,        // Historical word usage
+    Creative,          // Imaginative/fictional lexicon
+}
+
+#[derive(Clone, Debug)]
+pub enum DictionaryLength {
+    Pocket,            // 500-2,000 entries
+    Standard,          // 2,000-10,000 entries
+    Comprehensive,     // 10,000-50,000 entries
+    Unabridged,       // 50,000+ entries
+    Unlimited,        // Let creativity flow
+}
+
+// Educational lesson types
+#[derive(Clone, Debug)]
+pub enum EducationalType {
+    LanguageLearning,  // Language instruction
+    Translation,       // Between languages
+    Grammar,          // Grammar lessons
+    Vocabulary,       // Vocabulary building
+    Literature,       // Literary analysis
+    History,          // Historical lessons
+    Science,          // Scientific concepts
+    Mathematics,      // Math instruction
+    Arts,             // Creative arts
+    General,          // General education
+}
+
+#[derive(Clone, Debug)]
+pub enum EducationalLength {
+    QuickLesson,      // 5-15 minutes
+    StandardLesson,   // 15-45 minutes
+    ExtendedLesson,   // 45-90 minutes
+    CourseModule,     // Multiple sessions
+    FullCourse,       // Complete curriculum
+}
+
+#[derive(Clone, Debug)]
+pub enum EducationalAudience {
+    Preschool,        // Ages 3-5
+    Elementary,       // Ages 6-11
+    MiddleSchool,     // Ages 12-14
+    HighSchool,       // Ages 15-18
+    College,          // Ages 18+
+    Adult,            // Adult learners
+    Professional,     // Professional development
+    Senior,           // Senior learners
+    All,              // All audiences
+}
+
+// Children's book types
+#[derive(Clone, Debug)]
+pub enum ChildrensBookType {
+    PictureBook,      // Ages 2-8, with illustrations
+    EarlyReader,      // Ages 4-8, simple text
+    ChapterBook,      // Ages 6-10, short chapters
+    MiddleGrade,      // Ages 8-12, longer stories
+    YoungAdult,       // Ages 12+, mature themes
+    Educational,      // Learning-focused
+    Bedtime,          // Calming stories
+    Adventure,        // Action and exploration
+    Fantasy,          // Magical and imaginative
+    Realistic,        // Real-world situations
+}
+
+#[derive(Clone, Debug)]
+pub enum ChildrensBookLength {
+    Board,            // 10-100 words (toddlers)
+    Picture,          // 100-1,000 words
+    Early,            // 1,000-2,500 words
+    Chapter,          // 2,500-10,000 words
+    Middle,           // 10,000-40,000 words
+    Young,            // 40,000-80,000 words
+}
+
+#[derive(Clone, Debug)]
+pub enum ChildrensAgeGroup {
+    Toddler,          // Ages 1-3
+    Preschool,        // Ages 3-5
+    Kindergarten,     // Ages 5-6
+    EarlyElementary,  // Ages 6-8
+    Elementary,       // Ages 8-11
+    MiddleGrade,      // Ages 11-14
+    YoungAdult,       // Ages 14+
 }

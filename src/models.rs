@@ -207,6 +207,9 @@ impl HuggingFaceClient {
             ContentType::PlanningDoc => ("planning document", "section"),
             ContentType::MeetingNotes => ("meeting notes", "section"),
             ContentType::MeetingSummary => ("meeting summary", "section"),
+            ContentType::Dictionary => ("dictionary", "entry"),
+            ContentType::EducationalLesson => ("educational lesson", "module"),
+            ContentType::ChildrensBook => ("children's book", "chapter"),
         };
         
         let specific_instructions = match content_type {
@@ -233,6 +236,9 @@ impl HuggingFaceClient {
             ContentType::PlanningDoc => "Include timelines, resources, and deliverables.",
             ContentType::MeetingNotes => "Include discussion points and action items.",
             ContentType::MeetingSummary => "Include key decisions and next steps.",
+            ContentType::Dictionary => "Include word definitions, pronunciations, and etymologies.",
+            ContentType::EducationalLesson => "Include learning objectives, examples, and practice exercises.",
+            ContentType::ChildrensBook => "Include age-appropriate language, engaging characters, and positive themes.",
         };
         
         let prompt = format!(
@@ -396,6 +402,30 @@ impl HuggingFaceClient {
                 - Key discussion points\n\
                 - Action items and owners\n\
                 - Clear, concise summaries"
+            },
+            ContentType::Dictionary => {
+                "\n\nFormat as dictionary entries with:\n\
+                - Word headings in bold\n\
+                - Pronunciations in phonetic notation\n\
+                - Multiple definitions numbered\n\
+                - Etymology and origin information\n\
+                - Example sentences in italics"
+            },
+            ContentType::EducationalLesson => {
+                "\n\nFormat as educational content with:\n\
+                - Clear learning objectives\n\
+                - Step-by-step instructions\n\
+                - Examples and practice exercises\n\
+                - Age-appropriate language\n\
+                - Interactive elements and assessments"
+            },
+            ContentType::ChildrensBook => {
+                "\n\nFormat as children's literature with:\n\
+                - Age-appropriate vocabulary\n\
+                - Engaging character dialogue\n\
+                - Descriptive but simple sentences\n\
+                - Positive themes and lessons\n\
+                - Illustration descriptions in [brackets]"
             },
         };
         

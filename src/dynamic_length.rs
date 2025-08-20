@@ -78,6 +78,9 @@ impl DynamicLengthConfig {
             ContentType::MarketingAd => Self::for_marketing_content(),
             ContentType::BlogPost => Self::for_blog_posts(),
             ContentType::Document => Self::for_business_documents(),
+            ContentType::Dictionary => Self::for_dictionaries(),
+            ContentType::EducationalLesson => Self::for_educational_lessons(),
+            ContentType::ChildrensBook => Self::for_childrens_books(),
             _ => Self::default_fixed_length(content_type),
         }
     }
@@ -364,6 +367,80 @@ impl DynamicLengthConfig {
                 climax_weight: 1.0,
                 resolution_weight: 1.0,
                 transition_weight: 1.0,
+            },
+        }
+    }
+
+    fn for_dictionaries() -> Self {
+        Self {
+            content_type: ContentType::Dictionary,
+            use_dynamic_lengths: true,
+            base_target_words: 800, // Base entry length
+            variation_range: (0.2, 8.0), // Short definitions to detailed etymologies
+            length_patterns: vec![
+                LengthPattern {
+                    pattern_name: "Dictionary Flow".to_string(),
+                    section_weights: vec![0.3, 1.2, 0.5, 2.0, 0.8, 1.5, 0.4, 3.0],
+                    repeatable: true,
+                },
+            ],
+            narrative_flow_weights: NarrativeFlowWeights {
+                opening_weight: 1.2,
+                middle_weight: 1.0,
+                climax_weight: 1.5,
+                resolution_weight: 0.9,
+                transition_weight: 0.6,
+            },
+        }
+    }
+
+    fn for_educational_lessons() -> Self {
+        Self {
+            content_type: ContentType::EducationalLesson,
+            use_dynamic_lengths: true,
+            base_target_words: 1500,
+            variation_range: (0.5, 2.0), // Quick concepts to detailed explanations
+            length_patterns: vec![
+                LengthPattern {
+                    pattern_name: "Learning Progression".to_string(),
+                    section_weights: vec![1.3, 1.0, 1.2, 0.8, 1.4, 1.1, 0.9, 1.2],
+                    repeatable: true,
+                },
+            ],
+            narrative_flow_weights: NarrativeFlowWeights {
+                opening_weight: 1.3,
+                middle_weight: 1.1,
+                climax_weight: 1.4,
+                resolution_weight: 1.2,
+                transition_weight: 0.9,
+            },
+        }
+    }
+
+    fn for_childrens_books() -> Self {
+        Self {
+            content_type: ContentType::ChildrensBook,
+            use_dynamic_lengths: true,
+            base_target_words: 800, // Age-appropriate length
+            variation_range: (0.3, 3.0), // Short scenes to longer adventures
+            length_patterns: vec![
+                LengthPattern {
+                    pattern_name: "Children's Adventure".to_string(),
+                    section_weights: vec![1.1, 0.8, 1.2, 0.6, 1.4, 0.9, 1.0, 1.3],
+                    repeatable: true,
+                },
+                LengthPattern {
+                    pattern_name: "Gentle Learning".to_string(),
+                    section_weights: vec![1.0, 1.0, 1.1, 0.9, 1.2, 1.0, 0.8, 1.1],
+                    repeatable: true,
+                },
+            ],
+            narrative_flow_weights: NarrativeFlowWeights {
+                opening_weight: 1.2,
+                middle_weight: 1.0,
+                climax_weight: 1.3,
+                resolution_weight: 1.1,
+                transition_weight: 0.7,
             },
         }
     }

@@ -11,6 +11,7 @@ mod simple_cli;
 mod poetry_enhancements;
 mod continuation;
 mod dynamic_length;
+mod creative_enhancement;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 

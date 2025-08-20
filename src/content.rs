@@ -28,6 +28,9 @@ pub enum ContentType {
     PlanningDoc,
     MeetingNotes,
     MeetingSummary,
+    Dictionary,
+    EducationalLesson,
+    ChildrensBook,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,6 +369,9 @@ impl Content {
             ContentType::PlanningDoc => "Planning Document",
             ContentType::MeetingNotes => "Meeting Notes",
             ContentType::MeetingSummary => "Meeting Summary",
+            ContentType::Dictionary => "Dictionary",
+            ContentType::EducationalLesson => "Educational Lesson",
+            ContentType::ChildrensBook => "Children's Book",
         };
         
         let mut context = format!(
@@ -401,6 +407,9 @@ impl Content {
                 ContentType::PlanningDoc => "sections",
                 ContentType::MeetingNotes => "sections",
                 ContentType::MeetingSummary => "sections",
+                ContentType::Dictionary => "entries",
+                ContentType::EducationalLesson => "lessons",
+                ContentType::ChildrensBook => "chapters",
             };
             
             context.push_str(&format!("Previous {}:\n", section_name));
@@ -467,6 +476,9 @@ impl Content {
                 ContentType::PlanningDoc => "Section",
                 ContentType::MeetingNotes => "Section",
                 ContentType::MeetingSummary => "Section",
+                ContentType::Dictionary => "Entry",
+                ContentType::EducationalLesson => "Lesson",
+                ContentType::ChildrensBook => "Chapter",
             };
             
             context.push_str(&format!("{} {}: {}\n", section_type, section.number, section.title));
@@ -509,6 +521,9 @@ impl Content {
             ContentType::PlanningDoc => "Planning Document",
             ContentType::MeetingNotes => "Meeting Notes",
             ContentType::MeetingSummary => "Meeting Summary",
+            ContentType::Dictionary => "Dictionary",
+            ContentType::EducationalLesson => "Educational Lesson",
+            ContentType::ChildrensBook => "Children's Book",
         };
         
         let mut content_text = format!(
@@ -541,6 +556,9 @@ impl Content {
                 ContentType::Play => self.format_play_scene(&section.content),
                 ContentType::AudioScript => self.format_audio_script(&section.content),
                 ContentType::GameScript => self.format_game_script(&section.content),
+                ContentType::Dictionary => self.format_dictionary_entry(&section.content),
+                ContentType::EducationalLesson => self.format_educational_content(&section.content),
+                ContentType::ChildrensBook => self.format_childrens_content(&section.content),
                 _ => section.content.clone(),
             };
             
@@ -640,6 +658,64 @@ impl Content {
             .collect()
     }
     
+    pub fn format_dictionary_entry(&self, content: &str) -> String {
+        // Dictionary entry formatting with definitions
+        content.lines()
+            .map(|line| {
+                let line = line.trim();
+                if line.is_empty() {
+                    String::new()
+                } else if line.starts_with("WORD:") {
+                    format!("**{}**\n", line.strip_prefix("WORD:").unwrap_or(line).trim())
+                } else if line.starts_with("DEFINITION:") {
+                    format!("  {}\n", line.strip_prefix("DEFINITION:").unwrap_or(line).trim())
+                } else if line.starts_with("ETYMOLOGY:") {
+                    format!("  *Etymology:* {}\n", line.strip_prefix("ETYMOLOGY:").unwrap_or(line).trim())
+                } else {
+                    format!("{}\n", line)
+                }
+            })
+            .collect()
+    }
+    
+    pub fn format_educational_content(&self, content: &str) -> String {
+        // Educational lesson formatting with objectives
+        content.lines()
+            .map(|line| {
+                let line = line.trim();
+                if line.is_empty() {
+                    String::new()
+                } else if line.starts_with("OBJECTIVE:") {
+                    format!("📚 **Learning Objective:** {}\n", line.strip_prefix("OBJECTIVE:").unwrap_or(line).trim())
+                } else if line.starts_with("ACTIVITY:") {
+                    format!("🎯 **Activity:** {}\n", line.strip_prefix("ACTIVITY:").unwrap_or(line).trim())
+                } else if line.starts_with("ASSESSMENT:") {
+                    format!("📝 **Assessment:** {}\n", line.strip_prefix("ASSESSMENT:").unwrap_or(line).trim())
+                } else {
+                    format!("{}\n", line)
+                }
+            })
+            .collect()
+    }
+    
+    pub fn format_childrens_content(&self, content: &str) -> String {
+        // Children's book formatting with simple, engaging style
+        content.lines()
+            .map(|line| {
+                let line = line.trim();
+                if line.is_empty() {
+                    String::new()
+                } else if line.starts_with("ILLUSTRATION:") {
+                    format!("🎨 *[{}]*\n", line.strip_prefix("ILLUSTRATION:").unwrap_or(line).trim())
+                } else if line.starts_with("DIALOGUE:") {
+                    format!("💬 \"{}\"\n", line.strip_prefix("DIALOGUE:").unwrap_or(line).trim())
+                } else {
+                    format!("{}\n", line)
+                }
+            })
+            .collect()
+    }
+    
     pub fn to_markdown(&self) -> String {
         let content_type_name = match self.content_type {
             ContentType::Book => "Book",
@@ -665,6 +741,9 @@ impl Content {
             ContentType::PlanningDoc => "Planning Document",
             ContentType::MeetingNotes => "Meeting Notes",
             ContentType::MeetingSummary => "Meeting Summary",
+            ContentType::Dictionary => "Dictionary",
+            ContentType::EducationalLesson => "Educational Lesson",
+            ContentType::ChildrensBook => "Children's Book",
         };
         
         let mut markdown = format!(
@@ -834,11 +913,13 @@ pub fn truncate_text(text: &str, max_chars: usize) -> String {
 impl StructuredOutline {
     pub fn new(title: String, premise: String, genre: String, target_audience: String, num_sections: usize, content_type: ContentType) -> Self {
         let section_type = match content_type {
-            ContentType::Book | ContentType::Memoir | ContentType::InteractiveFiction => SectionType::Chapter,
+            ContentType::Book | ContentType::Memoir | ContentType::InteractiveFiction | ContentType::ChildrensBook => SectionType::Chapter,
             ContentType::Screenplay | ContentType::Play => SectionType::Scene,
             ContentType::TvScript => SectionType::Episode,
             ContentType::AudioScript => SectionType::Segment,
             ContentType::GameScript => SectionType::Interaction,
+            ContentType::Dictionary => SectionType::Section,
+            ContentType::EducationalLesson => SectionType::Section,
             _ => SectionType::Section,
         };
 
@@ -873,11 +954,13 @@ impl StructuredOutline {
 
     pub fn new_with_dynamic_seed(title: String, premise: String, genre: String, target_audience: String, num_sections: usize, content_type: ContentType, seed: u64) -> Self {
         let section_type = match content_type {
-            ContentType::Book | ContentType::Memoir | ContentType::InteractiveFiction => SectionType::Chapter,
+            ContentType::Book | ContentType::Memoir | ContentType::InteractiveFiction | ContentType::ChildrensBook => SectionType::Chapter,
             ContentType::Screenplay | ContentType::Play => SectionType::Scene,
             ContentType::TvScript => SectionType::Episode,
             ContentType::AudioScript => SectionType::Segment,
             ContentType::GameScript => SectionType::Interaction,
+            ContentType::Dictionary => SectionType::Section,
+            ContentType::EducationalLesson => SectionType::Section,
             _ => SectionType::Section,
         };
 
@@ -1123,6 +1206,9 @@ impl std::fmt::Display for ContentType {
             ContentType::PlanningDoc => "Planning Document",
             ContentType::MeetingNotes => "Meeting Notes",
             ContentType::MeetingSummary => "Meeting Summary",
+            ContentType::Dictionary => "Dictionary",
+            ContentType::EducationalLesson => "Educational Lesson",
+            ContentType::ChildrensBook => "Children's Book",
         };
         write!(f, "{}", s)
     }
