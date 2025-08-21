@@ -1,7 +1,10 @@
 use crate::cli_types::{Genre, WritingStyle, BookSize, ScreenplayLength, PlayLength, TvShowType, AudioType, GameGenre, DocumentType, DocumentLength, TechnicalDocType, ResearchDocType, ResearchLength, PoetryStyle, PersonalWritingType, PersonalLength, MarketingType, MarketingLength, BlogContentType, BlogLength, StrategicDocType, StrategicLength, MeetingDocType, MeetingLength};
 use crate::models::{HuggingFaceClient, get_model_recommendation};
 use crate::ollama::{OllamaClient, get_ollama_recommendation, get_download_instructions};
-use crate::content::{Content, Section, SectionType, ContentType, DocumentFormat, Book, truncate_text, count_words};
+use crate::content::{Content, Section, SectionType, ContentType, DocumentFormat, Book, truncate_text, count_words,
+    WorldState, PlotThread, PlotType, PlotStatus, PlotStage, MultiPlotCharacter, Location, Timeline, TimelineEvent, 
+    WorldRule, NarrativeStyle, NarrativeContext, TimeSpan, CharacterRole, CharacterStatus, LocationType, 
+    RuleType, RuleScope, PointOfView, TensionLevel, EventType, EventSignificance, TemporalStructure};
 use crate::config::{Config, save_book_state};
 use crate::poetry_enhancements::{EnhancedPoetryPrompt, create_emotion_from_theme, post_process_poetry};
 use crate::continuation::{interactive_continuation_setup, continuation_project_to_content};
@@ -157,18 +160,23 @@ pub async fn write_book(
     
     let author = config.default_author.clone();
     
+    // Apply creative optimizations for fiction before creating book
+    let estimated_pages = size.word_target().unwrap_or(50000) / 250; // ~250 words per page
+    
     // Create book instance
     let mut book = Book::new(
         title,
         author,
         genre.to_string(),
         style.to_string(),
-        premise,
+        premise.clone(),
         format!("{:?}", size),
         size.word_target(),
         size.chapter_target(),
         model.clone(),
     );
+    
+    optimize_fiction_creativity(&genre, &premise, estimated_pages, &mut book)?;
     
     println!("\n🎯 Book Configuration:");
     println!("   Genre: {}", book.genre);
@@ -178,6 +186,16 @@ pub async fn write_book(
         println!("   Words: {} target", target);
     }
     println!("   Sections: {} planned", book.metadata.target_sections);
+    
+    // Show any creative enhancements applied
+    if book.world_state.is_some() {
+        println!("   🎭 Enhanced: Multi-plot narrative enabled");
+    }
+    if let Some(ref profile) = book.stylistic_profile {
+        if !profile.genre_overlays.is_empty() {
+            println!("   🎨 Enhanced: Genre-specific stylistic optimizations applied");
+        }
+    }
     println!();
     
     // Generate book outline
@@ -4389,6 +4407,8 @@ pub async fn write_strategic_doc(
             outline: section_outline.unwrap_or_default(),
             created_at: Utc::now(),
             completed: true,
+            plot_thread: None,
+            narrative_context: None,
         };
         
         content.sections.push(section);
@@ -4549,6 +4569,8 @@ pub async fn write_meeting_doc(
             outline: section_outline.unwrap_or_default(),
             created_at: Utc::now(),
             completed: true,
+            plot_thread: None,
+            narrative_context: None,
         };
         
         content.sections.push(section);
@@ -6038,6 +6060,8 @@ async fn write_enhanced_poem(
         section_type: SectionType::Section,
         created_at: chrono::Utc::now(),
         completed: true,
+        plot_thread: None,
+        narrative_context: None,
     };
     
     content.sections.push(section);
@@ -8425,6 +8449,1177 @@ async fn write_book_continuation(
     );
     
     ollama_client.generate_text(model, &full_prompt, target_words as i32, 0.7).await
+}
+
+// Multi-plot narrative system implementation
+// Optimize fiction creativity based on book parameters
+fn optimize_fiction_creativity(
+    genre: &Genre, 
+    premise: &str, 
+    target_pages: usize,
+    content: &mut Content
+) -> Result<()> {
+    // Analyze if book would benefit from multi-plot structure
+    let should_use_multiplot = detect_multiplot_potential(genre, premise, target_pages);
+    
+    if should_use_multiplot {
+        println!("🎭 Enhanced: Detected complex narrative potential - enabling multi-plot storytelling");
+        enable_multiplot_features(content)?;
+    }
+    
+    // Apply genre-specific creative optimizations
+    apply_genre_optimizations(genre, content)?;
+    
+    // Apply premise-based creative enhancements
+    apply_premise_optimizations(premise, content)?;
+    
+    Ok(())
+}
+
+fn detect_multiplot_potential(genre: &Genre, premise: &str, target_pages: usize) -> bool {
+    // Multi-plot works best for longer books (300+ pages)
+    let is_long_book = target_pages >= 300;
+    
+    // Check genre suitability
+    let genre_supports_multiplot = matches!(genre, 
+        Genre::Fantasy | Genre::SciFi | Genre::Fiction | 
+        Genre::Historical | Genre::Thriller | Genre::Drama
+    );
+    
+    // Analyze premise for complexity indicators
+    let premise_lower = premise.to_lowercase();
+    let has_complexity_keywords = premise_lower.contains("family") ||
+        premise_lower.contains("generation") ||
+        premise_lower.contains("world") ||
+        premise_lower.contains("kingdom") ||
+        premise_lower.contains("war") ||
+        premise_lower.contains("saga") ||
+        premise_lower.contains("epic") ||
+        premise_lower.contains("multiple") ||
+        premise_lower.contains("several") ||
+        premise_lower.contains("empire") ||
+        premise_lower.contains("dynasty") ||
+        premise_lower.contains("legacy");
+        
+    is_long_book && genre_supports_multiplot && has_complexity_keywords
+}
+
+fn enable_multiplot_features(content: &mut Content) -> Result<()> {
+    // Create a world state for managing multiple plots
+    let world_state = crate::content::WorldState {
+        characters: Vec::new(),
+        locations: Vec::new(),
+        plot_threads: Vec::new(),
+        timeline: crate::content::Timeline {
+            events: Vec::new(),
+            current_time_markers: std::collections::HashMap::new(),
+            temporal_structure: crate::content::TemporalStructure::Chronological,
+        },
+        world_rules: Vec::new(),
+        active_plots: Vec::new(),
+        narrative_style: crate::content::NarrativeStyle::Parallel,
+    };
+    
+    content.world_state = Some(world_state);
+    
+    // Update stylistic profile for multi-plot narratives
+    if let Some(ref mut profile) = content.stylistic_profile {
+        profile.narrative_voice.primary_pov = crate::content::PointOfViewStyle::ThirdPersonOmniscient;
+        profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Syncopated; // Varied pacing for plot switching
+    }
+    
+    Ok(())
+}
+
+fn apply_genre_optimizations(genre: &Genre, content: &mut Content) -> Result<()> {
+    if let Some(ref mut profile) = content.stylistic_profile {
+        match genre {
+            Genre::Fantasy => {
+                apply_fantasy_optimizations(profile)?;
+            },
+            Genre::SciFi => {
+                apply_scifi_optimizations(profile)?;
+            },
+            Genre::Fiction => {
+                apply_general_fiction_optimizations(profile)?;
+            },
+            Genre::Mystery | Genre::Thriller => {
+                profile.tone_modulation.base_tone = crate::content::EmotionalTone::Ominous;
+                profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Breathless;
+                // Add tension-building techniques
+                profile.dialogue_system.dialogue_tags = "tension-building".to_string();
+            },
+            Genre::Romance => {
+                profile.tone_modulation.base_tone = crate::content::EmotionalTone::Lyrical;
+                profile.dialogue_system.dialogue_tags = "emotionally expressive".to_string();
+                // Focus on character relationship dynamics
+                profile.sensory_profile.sensory_priorities = vec![
+                    crate::content::SensoryChannel::Visual
+                ];
+            },
+            Genre::Horror => {
+                profile.tone_modulation.base_tone = crate::content::EmotionalTone::Ominous;
+                profile.sensory_profile.sensory_priorities = vec![
+                    crate::content::SensoryChannel::Visual,
+                    crate::content::SensoryChannel::Auditory,
+                    crate::content::SensoryChannel::Tactile
+                ];
+                profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Hypnotic;
+            },
+            _ => {} // Default optimizations
+        }
+    }
+    Ok(())
+}
+
+fn apply_premise_optimizations(premise: &str, content: &mut Content) -> Result<()> {
+    if let Some(ref mut profile) = content.stylistic_profile {
+        let premise_lower = premise.to_lowercase();
+        
+        // Advanced Fiction Writing Techniques Based on Research
+        
+        // Detect emotional tone and character dynamics
+        if premise_lower.contains("dark") || premise_lower.contains("tragedy") {
+            profile.tone_modulation.base_tone = crate::content::EmotionalTone::Melancholic;
+            apply_character_pressure_techniques(profile)?;
+        } else if premise_lower.contains("comedy") || premise_lower.contains("humor") {
+            profile.tone_modulation.base_tone = crate::content::EmotionalTone::Whimsical;
+            profile.dialogue_system.dialogue_tags = "witty_character_revealing".to_string();
+        } else if premise_lower.contains("epic") || premise_lower.contains("grand") {
+            profile.tone_modulation.base_tone = crate::content::EmotionalTone::Lyrical;
+            profile.figurative_language.figurative_density = crate::content::FigurativeDensity::Lyrical;
+        }
+        
+        // Detect character-driven vs action-driven narratives
+        if premise_lower.contains("journey") || premise_lower.contains("quest") || 
+           premise_lower.contains("adventure") || premise_lower.contains("travel") {
+            apply_journey_narrative_techniques(profile)?;
+        }
+        
+        // Detect relationship dynamics
+        if premise_lower.contains("family") || premise_lower.contains("relationship") ||
+           premise_lower.contains("love") || premise_lower.contains("friendship") {
+            apply_relationship_focus_techniques(profile)?;
+        }
+        
+        // Detect conflict-driven narratives
+        if premise_lower.contains("war") || premise_lower.contains("battle") ||
+           premise_lower.contains("conflict") || premise_lower.contains("fight") {
+            profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Breathless;
+            profile.sensory_profile.sensory_priorities.insert(0, crate::content::SensoryChannel::Auditory);
+        }
+        
+        // Detect philosophical or thematic complexity
+        if premise_lower.contains("philosophical") || premise_lower.contains("meaning") ||
+           premise_lower.contains("society") || premise_lower.contains("humanity") {
+            profile.meta_narrative = Some(crate::content::MetaNarrativeElements {
+                self_awareness_level: crate::content::SelfAwarenessLevel::Subtle,
+                meta_commentary: vec!["thematic_exploration".to_string(), "societal_commentary".to_string()],
+                structural_references: vec!["archetypal_patterns".to_string(), "symbolic_representation".to_string()],
+                reader_address: "contemplative_invitation".to_string(),
+            });
+        }
+        
+        // Apply "awful things happen to characters" principle for character revelation
+        if premise_lower.contains("survival") || premise_lower.contains("struggle") ||
+           premise_lower.contains("challenge") || premise_lower.contains("test") {
+            apply_character_pressure_techniques(profile)?;
+        }
+        
+        // Apply academic fiction fundamentals for all premises
+        apply_illusion_maintenance_techniques(profile)?;
+        
+        // Detect complexity level and apply appropriate reader-centric techniques
+        let complexity_keywords = ["complex", "intricate", "layered", "multifaceted", "nuanced", "sophisticated"];
+        let complexity_indicators = complexity_keywords.iter()
+            .filter(|&keyword| premise_lower.contains(keyword))
+            .count();
+        
+        if complexity_indicators > 0 {
+            // For complex premises, emphasize clarity principles
+            profile.tone_modulation.base_tone = crate::content::EmotionalTone::Contemplative;
+            apply_reader_centric_optimizations(profile)?;
+        }
+        
+        // Detect character-focused vs plot-focused premises
+        let character_keywords = ["character", "person", "individual", "protagonist", "hero", "heroine", "personality", "identity"];
+        let character_focus_indicators = character_keywords.iter()
+            .filter(|&keyword| premise_lower.contains(keyword))
+            .count();
+        
+        if character_focus_indicators >= 2 {
+            apply_character_authenticity_techniques(profile)?;
+        }
+        
+        // Always apply narrative momentum for fiction
+        apply_narrative_momentum_techniques(profile)?;
+    }
+    Ok(())
+}
+
+// Apply detail economy principles (academic fundamental)
+fn apply_detail_economy_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // "Economize reader's attention" - every detail must serve the story
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "detail_economy_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::MetaSymbol,
+        core_meaning: "economical_use_of_detail_serving_story_purpose".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![1, 5, 9, 13], // Regular attention economy checkpoints
+    });
+    
+    // Adjust figurative language for clarity without sacrificing depth
+    profile.figurative_language.figurative_density = crate::content::FigurativeDensity::Moderate;
+    
+    // Focus on essential sensory details
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual, // Most essential for scene-setting
+        crate::content::SensoryChannel::Tactile  // Most immediate for immersion
+    ];
+    
+    Ok(())
+}
+
+// Apply character development through pressure/conflict (fiction writing principle)
+fn apply_character_pressure_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Add symbolic elements for character under pressure
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "character_pressure_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::ArchetypalSymbol,
+        core_meaning: "character_revelation_through_adversity".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![1, 3, 5], // Appear at key dramatic moments
+    });
+    
+    // Emphasize character-revealing dialogue
+    profile.dialogue_system.dialogue_tags = "pressure_revealing".to_string();
+    
+    Ok(())
+}
+
+// Apply quest/journey narrative structure
+fn apply_journey_narrative_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Add quest structure symbolic elements
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "heroic_journey_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::ArchetypalSymbol,
+        core_meaning: "character_transformation_through_quest".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![1, 6, 10, 15], // Classic quest milestone points
+    });
+    
+    // Enhanced sensory for world exploration
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual,
+        crate::content::SensoryChannel::Tactile,
+        crate::content::SensoryChannel::Olfactory
+    ];
+    
+    Ok(())
+}
+
+// Apply relationship-focused narrative techniques  
+fn apply_relationship_focus_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Emphasize emotional sensory channels
+    profile.sensory_profile.sensory_priorities.insert(0, crate::content::SensoryChannel::Visual);
+    
+    // Character-revealing dialogue focus
+    profile.dialogue_system.dialogue_tags = "relationship_dynamics_revealing".to_string();
+    
+    // Add relationship symbolic elements
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "relationship_dynamics_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::PersonalSymbol,
+        core_meaning: "character_connection_and_growth".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![2, 5, 8, 12], // Relationship milestone moments
+    });
+    
+    Ok(())
+}
+
+// Advanced Fiction Writing Fundamentals (based on academic research)
+fn apply_illusion_maintenance_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Core principle: Create and maintain reader immersion
+    profile.genre_overlays.push(crate::content::GenreOverlay {
+        genre_type: crate::content::GenreType::ContemporaryLiterary,
+        intensity: 0.95,
+        stylistic_markers: vec![
+            crate::content::StylisticMarker {
+                marker_type: "immersion_maintenance".to_string(),
+                implementation: "Maintain consistent fictional reality without breaks that remind readers of artifice".to_string(),
+                frequency: 1.0,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "clarity_over_complexity".to_string(),
+                implementation: "Prioritize clarity and reader comprehension over stylistic complexity".to_string(),
+                frequency: 0.9,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "reader_attention_economy".to_string(),
+                implementation: "Economize reader's attention - every detail must serve the story".to_string(),
+                frequency: 0.8,
+            }
+        ],
+        lexical_preferences: vec!["clarity_focused".to_string(), "immersion_supporting".to_string(), "economical_detail".to_string()],
+        structural_influences: vec!["consistent_momentum".to_string(), "reader_transportation".to_string(), "illusion_maintenance".to_string()],
+    });
+    
+    // Adjust tone for transportive experience
+    profile.tone_modulation.base_tone = crate::content::EmotionalTone::Contemplative;
+    
+    Ok(())
+}
+
+fn apply_reader_centric_optimizations(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Focus on reader's psychological response and engagement
+    profile.dialogue_system.dialogue_tags = "reader_engagement_optimized".to_string();
+    
+    // Add symbolic elements for reader connection
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "reader_connection_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::PersonalSymbol,
+        core_meaning: "elements_that_facilitate_reader_identification_and_emotional_engagement".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![1, 4, 7, 10], // Strategic placement for sustained engagement
+    });
+    
+    // Optimize sensory profile for immersion
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual,
+        crate::content::SensoryChannel::Tactile,
+        crate::content::SensoryChannel::Auditory
+    ];
+    
+    Ok(())
+}
+
+fn apply_character_authenticity_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Create multidimensional, authentic characters readers can connect with
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "character_authenticity_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::ArchetypalSymbol,
+        core_meaning: "multidimensional_character_development_avoiding_stereotypes".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![2, 6, 10, 14], // Character development milestones
+    });
+    
+    // Enhance dialogue for authentic character voice
+    profile.dialogue_system.dialogue_tags = "authentic_character_voice".to_string();
+    
+    // Meta-narrative awareness for character depth
+    if profile.meta_narrative.is_none() {
+        profile.meta_narrative = Some(crate::content::MetaNarrativeElements {
+            self_awareness_level: crate::content::SelfAwarenessLevel::Subtle,
+            meta_commentary: vec!["character_depth_techniques".to_string(), "authenticity_markers".to_string()],
+            structural_references: vec!["character_arc_consistency".to_string(), "emotional_believability".to_string()],
+            reader_address: "empathetic_connection".to_string(),
+        });
+    }
+    
+    Ok(())
+}
+
+fn apply_narrative_momentum_techniques(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Maintain consistent narrative momentum without breaks in story flow
+    profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Flowing;
+    
+    // Add structural elements for momentum maintenance
+    profile.symbolic_elements.push(crate::content::SymbolicElement {
+        id: "narrative_momentum_symbol".to_string(),
+        symbol_type: crate::content::SymbolType::MetaSymbol,
+        core_meaning: "consistent_story_progression_without_momentum_breaks".to_string(),
+        evolution_stages: Vec::new(),
+        context_associations: Vec::new(),
+        recurrence_pattern: vec![3, 6, 9, 12], // Regular momentum checkpoints
+    });
+    
+    Ok(())
+}
+
+// Advanced Fantasy Literature Optimizations
+fn apply_fantasy_optimizations(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Apply fundamental fiction writing techniques first
+    apply_illusion_maintenance_techniques(profile)?;
+    apply_reader_centric_optimizations(profile)?;
+    apply_character_authenticity_techniques(profile)?;
+    apply_narrative_momentum_techniques(profile)?;
+    
+    // World-building focus with rich figurative language
+    profile.figurative_language.figurative_density = crate::content::FigurativeDensity::Lyrical;
+    
+    // Multi-sensory world immersion
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual,
+        crate::content::SensoryChannel::Tactile,
+        crate::content::SensoryChannel::Olfactory,
+        crate::content::SensoryChannel::Gustatory
+    ];
+    
+    // Archetypal character development and mythological depth
+    profile.genre_overlays.push(crate::content::GenreOverlay {
+        genre_type: crate::content::GenreType::FantasyEpic,
+        intensity: 0.9,
+        stylistic_markers: vec![
+            crate::content::StylisticMarker {
+                marker_type: "archetypal_characters".to_string(),
+                implementation: "Use archetypal character patterns and mythological depth".to_string(),
+                frequency: 0.8,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "world_building_focus".to_string(),
+                implementation: "Emphasize detailed world-building and immersive descriptions".to_string(),
+                frequency: 0.9,
+            }
+        ],
+        lexical_preferences: vec!["evocative_descriptive".to_string(), "avoid_archaic".to_string(), "immersive_language".to_string()],
+        structural_influences: vec!["quest_structure".to_string(), "character_revelation_through_choice".to_string(), "magical_system_consistency".to_string()],
+    });
+    
+    // Contemplative tone for deeper themes
+    profile.tone_modulation.base_tone = crate::content::EmotionalTone::Contemplative;
+    
+    // Enable meta-narrative for symbolic representation
+    profile.meta_narrative = Some(crate::content::MetaNarrativeElements {
+        self_awareness_level: crate::content::SelfAwarenessLevel::Subtle,
+        meta_commentary: vec!["societal_metaphors".to_string(), "archetypal_symbolism".to_string()],
+        structural_references: vec!["mythological_patterns".to_string(), "folkloric_influence".to_string()],
+        reader_address: "immersive_invitation".to_string(),
+    });
+    
+    Ok(())
+}
+
+// Science Fiction Optimizations
+fn apply_scifi_optimizations(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    profile.figurative_language.figurative_density = crate::content::FigurativeDensity::Rich;
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual,
+        crate::content::SensoryChannel::Auditory
+    ];
+    
+    profile.genre_overlays.push(crate::content::GenreOverlay {
+        genre_type: crate::content::GenreType::SciFiHard,
+        intensity: 0.8,
+        stylistic_markers: vec![
+            crate::content::StylisticMarker {
+                marker_type: "technical_precision".to_string(),
+                implementation: "Use precise technical language and scientific plausibility".to_string(),
+                frequency: 0.7,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "speculative_elements".to_string(),
+                implementation: "Integrate speculative concepts and future implications".to_string(),
+                frequency: 0.8,
+            }
+        ],
+        lexical_preferences: vec!["scientific_plausibility".to_string(), "future_concepts".to_string()],
+        structural_influences: vec!["cause_effect_logic".to_string(), "technological_impact".to_string()],
+    });
+    
+    profile.tone_modulation.base_tone = crate::content::EmotionalTone::Clinical;
+    Ok(())
+}
+
+// General Fiction Optimizations Based on Research
+fn apply_general_fiction_optimizations(profile: &mut crate::content::StylisticProfile) -> Result<()> {
+    // Apply fundamental fiction writing techniques
+    apply_illusion_maintenance_techniques(profile)?;
+    apply_reader_centric_optimizations(profile)?;
+    apply_character_authenticity_techniques(profile)?;
+    apply_narrative_momentum_techniques(profile)?;
+    
+    // Focus on character-driven narrative
+    profile.dialogue_system.dialogue_tags = "character_revealing_and_authentic".to_string();
+    
+    // Balanced sensory approach optimized for immersion
+    profile.sensory_profile.sensory_priorities = vec![
+        crate::content::SensoryChannel::Visual,
+        crate::content::SensoryChannel::Tactile,
+        crate::content::SensoryChannel::Auditory
+    ];
+    
+    // Contemporary literary techniques enhanced with academic principles
+    profile.genre_overlays.push(crate::content::GenreOverlay {
+        genre_type: crate::content::GenreType::ContemporaryLiterary,
+        intensity: 0.9, // Increased intensity for better optimization
+        stylistic_markers: vec![
+            crate::content::StylisticMarker {
+                marker_type: "character_focus".to_string(),
+                implementation: "Every sentence reveals character or advances action without breaking immersion".to_string(),
+                frequency: 0.95,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "choice_revelation".to_string(),
+                implementation: "Characters reveal themselves through authentic choices under pressure".to_string(),
+                frequency: 0.9,
+            },
+            crate::content::StylisticMarker {
+                marker_type: "technique_as_means".to_string(),
+                implementation: "Technical skill serves storytelling without constraining creativity".to_string(),
+                frequency: 0.8,
+            }
+        ],
+        lexical_preferences: vec![
+            "clear_understanding".to_string(), 
+            "reader_engagement".to_string(),
+            "economical_detail".to_string(),
+            "immersion_supporting".to_string()
+        ],
+        structural_influences: vec![
+            "scene_sequel_structure".to_string(), 
+            "stimulus_response".to_string(), 
+            "dramatic_tension".to_string(),
+            "consistent_momentum".to_string(),
+            "illusion_maintenance".to_string()
+        ],
+    });
+    
+    // Flowing rhythm for narrative momentum (academic principle)
+    profile.pacing_profile.default_rhythm = crate::content::WritingRhythm::Flowing;
+    
+    Ok(())
+}
+
+async fn interactive_multi_plot_book_mode() -> Result<()> {
+    println!("\n🎭 Multi-Plot Book Creation");
+    println!("═══════════════════════════");
+    println!("Create complex narratives with multiple storylines, characters, and interconnected plots");
+    println!();
+
+    let mode_options = vec![
+        "🆕 Create new multi-plot saga",
+        "📂 Continue existing multi-plot book",
+        "🔧 Manage existing world/plots",
+        "← Back to book creation",
+    ];
+
+    let mode_choice = Select::new()
+        .with_prompt("What would you like to do?")
+        .items(&mode_options)
+        .default(0)
+        .interact()?;
+
+    match mode_choice {
+        0 => create_new_multiplot_saga().await,
+        1 => continue_multiplot_book().await,
+        2 => manage_multiplot_world().await,
+        _ => Ok(()),
+    }
+}
+
+async fn create_new_multiplot_saga() -> Result<()> {
+    println!("\n🎭 Creating New Multi-Plot Saga");
+    println!("═══════════════════════════════");
+    println!();
+
+    // Basic book information
+    let title: String = Input::new()
+        .with_prompt("Title of your saga/series")
+        .interact_text()?;
+
+    let author: String = Input::new()
+        .with_prompt("Author name")
+        .default("Anonymous".to_string())
+        .interact_text()?;
+
+    let genre: String = Input::new()
+        .with_prompt("Primary genre (Fantasy, Sci-Fi, Historical Fiction, etc.)")
+        .default("Fantasy".to_string())
+        .interact_text()?;
+
+    let writing_style: String = Input::new()
+        .with_prompt("Writing style (Epic, Literary, Adventure, etc.)")
+        .default("Epic".to_string())
+        .interact_text()?;
+
+    let premise: String = Input::new()
+        .with_prompt("Overall premise/world concept for your saga")
+        .interact_text()?;
+
+    // Choose narrative structure
+    let narrative_styles = vec![
+        "Parallel - Multiple simultaneous storylines (Game of Thrones style)",
+        "Interwoven - Plots that regularly intersect (Lord of the Rings style)",
+        "Episodic - Separate but connected episodes (Chronicles/anthology style)",
+        "Cyclical - Storylines that repeat themes across generations",
+        "Experimental - Non-traditional narrative structures",
+    ];
+
+    let narrative_idx = Select::new()
+        .with_prompt("Choose your narrative structure")
+        .items(&narrative_styles)
+        .default(0)
+        .interact()?;
+
+    let narrative_style = match narrative_idx {
+        0 => NarrativeStyle::Parallel,
+        1 => NarrativeStyle::Interwoven,
+        2 => NarrativeStyle::Episodic,
+        3 => NarrativeStyle::Cyclical,
+        _ => NarrativeStyle::Experimental,
+    };
+
+    // Set up multiple plot threads
+    let num_plots: String = Input::new()
+        .with_prompt("How many main plot threads? (2-6 recommended)")
+        .default("3".to_string())
+        .interact_text()?;
+
+    let num_plots_parsed: usize = num_plots.parse().unwrap_or(3).max(2).min(8);
+
+    let mut plot_threads = Vec::new();
+    let mut all_characters = Vec::new();
+    let mut all_locations = Vec::new();
+
+    println!("\nNow let's set up your {} plot threads:", num_plots_parsed);
+
+    for i in 1..=num_plots_parsed {
+        let plot = create_plot_thread(i, &genre).await?;
+        
+        // Collect characters and locations from this plot
+        for char_name in &plot.main_characters {
+            if !all_characters.iter().any(|c: &MultiPlotCharacter| c.name == *char_name) {
+                let character = create_character_for_plot(char_name, &plot.id)?;
+                all_characters.push(character);
+            }
+        }
+
+        for loc_name in &plot.key_locations {
+            if !all_locations.iter().any(|l: &Location| l.name == *loc_name) {
+                let location = create_location_for_plot(loc_name, &plot.id)?;
+                all_locations.push(location);
+            }
+        }
+
+        plot_threads.push(plot);
+    }
+
+    // Create world state
+    let world_state = WorldState {
+        characters: all_characters,
+        locations: all_locations,
+        plot_threads: plot_threads.clone(),
+        timeline: create_initial_timeline(&plot_threads)?,
+        world_rules: create_basic_world_rules(&genre)?,
+        active_plots: plot_threads.iter().map(|p| p.id.clone()).collect(),
+        narrative_style,
+    };
+
+    // Create the book content
+    let target_chapters: String = Input::new()
+        .with_prompt("Target number of chapters (will be distributed across plots)")
+        .default("20".to_string())
+        .interact_text()?;
+
+    let target_chapters_num: usize = target_chapters.parse().unwrap_or(20);
+
+    let mut content = Content::new_book(
+        title.clone(),
+        author,
+        genre,
+        writing_style,
+        premise,
+        "Large".to_string(),
+        Some(target_chapters_num * 3000), // ~3000 words per chapter
+        target_chapters_num,
+        "llama3.2".to_string(),
+    );
+
+    content.world_state = Some(world_state);
+    content.outline = generate_multiplot_outline(&content).await?;
+
+    // Model selection and confirmation
+    let (use_ollama, model) = interactive_model_selection("Multi-plot saga", "Large book with complex narrative")?;
+    
+    if !use_ollama {
+        println!("❌ Multi-plot generation currently requires Ollama. Please set up Ollama and try again.");
+        return Ok(());
+    }
+
+    if !Confirm::new()
+        .with_prompt(&format!("Ready to start generating your multi-plot saga with {}?", model))
+        .interact()? {
+        println!("📚 Multi-plot creation cancelled.");
+        return Ok(());
+    }
+
+    println!("\n🎭 Starting multi-plot saga generation...");
+    println!("This will create chapters alternating between different plot threads");
+
+    // Generate chapters using multi-plot logic
+    generate_multiplot_chapters(&mut content, &model).await?;
+
+    // Save the content
+    let output_filename = format!("{}_multiplot.json", title.replace(" ", "_").to_lowercase());
+    let output_path = std::path::PathBuf::from(&output_filename);
+    
+    let content_json = serde_json::to_string_pretty(&content)?;
+    std::fs::write(&output_path, content_json)?;
+
+    println!("\n✅ Multi-plot saga generation completed!");
+    println!("💾 Saved to: {}", output_path.display());
+    println!("📊 Total chapters: {}", content.sections.len());
+    println!("📈 Total word count: {}", content.sections.iter().map(|s| s.word_count).sum::<usize>());
+
+    Ok(())
+}
+
+async fn create_plot_thread(plot_number: usize, genre: &str) -> Result<PlotThread> {
+    println!("\n--- Plot Thread {} ---", plot_number);
+
+    let name: String = Input::new()
+        .with_prompt("Plot thread name (e.g., 'The War in the North', 'Sarah's Journey')")
+        .interact_text()?;
+
+    let description: String = Input::new()
+        .with_prompt("Brief description of this plot thread")
+        .interact_text()?;
+
+    let plot_types = vec![
+        "MainStory - Primary narrative arc",
+        "Subplot - Secondary storyline", 
+        "Backstory - Historical context/flashbacks",
+        "Parallel - Simultaneous alternate storyline",
+        "Framing - Story-within-a-story setup",
+    ];
+
+    let plot_type_idx = Select::new()
+        .with_prompt("What type of plot thread is this?")
+        .items(&plot_types)
+        .default(if plot_number == 1 { 0 } else { 1 })
+        .interact()?;
+
+    let plot_type = match plot_type_idx {
+        0 => PlotType::MainStory,
+        1 => PlotType::Subplot,
+        2 => PlotType::Backstory,
+        3 => PlotType::Parallel,
+        _ => PlotType::Framing,
+    };
+
+    let theme: String = Input::new()
+        .with_prompt("Central theme of this plot (love, power, redemption, etc.)")
+        .default("adventure".to_string())
+        .interact_text()?;
+
+    // Get main characters for this plot
+    let char_input: String = Input::new()
+        .with_prompt("Main characters for this plot (comma-separated names)")
+        .interact_text()?;
+    
+    let main_characters: Vec<String> = char_input
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Get key locations
+    let loc_input: String = Input::new()
+        .with_prompt("Key locations for this plot (comma-separated)")
+        .interact_text()?;
+    
+    let key_locations: Vec<String> = loc_input
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let time_start: String = Input::new()
+        .with_prompt("When does this plot begin? (e.g., 'Year 1', 'Ancient times', 'Modern day')")
+        .default("Beginning".to_string())
+        .interact_text()?;
+
+    Ok(PlotThread {
+        id: format!("plot_{}", plot_number),
+        name,
+        description,
+        plot_type,
+        status: PlotStatus::Planning,
+        main_characters,
+        key_locations,
+        timeline_span: TimeSpan {
+            start_marker: time_start,
+            end_marker: None,
+            duration_description: "Ongoing".to_string(),
+        },
+        theme,
+        current_stage: PlotStage::Introduction,
+        intersections: Vec::new(), // Will be filled later when analyzing plot connections
+    })
+}
+
+fn create_character_for_plot(name: &str, plot_id: &str) -> Result<MultiPlotCharacter> {
+    Ok(MultiPlotCharacter {
+        id: format!("char_{}", name.to_lowercase().replace(" ", "_")),
+        name: name.to_string(),
+        description: format!("Character in {}", plot_id),
+        role: CharacterRole::Protagonist, // Default, can be updated later
+        affiliations: vec![plot_id.to_string()],
+        current_status: CharacterStatus::Active,
+        timeline_appearances: Vec::new(),
+        character_arc: None,
+        relationships: Vec::new(),
+    })
+}
+
+fn create_location_for_plot(name: &str, plot_id: &str) -> Result<Location> {
+    Ok(Location {
+        id: format!("loc_{}", name.to_lowercase().replace(" ", "_")),
+        name: name.to_string(),
+        description: format!("Location featured in {}", plot_id),
+        location_type: LocationType::City, // Default
+        time_period: None,
+        connected_locations: Vec::new(),
+        significance: vec![plot_id.to_string()],
+        current_state: "Active".to_string(),
+    })
+}
+
+fn create_initial_timeline(plot_threads: &[PlotThread]) -> Result<Timeline> {
+    let mut events = Vec::new();
+    
+    for plot in plot_threads {
+        let event = TimelineEvent {
+            id: format!("event_start_{}", plot.id),
+            time_marker: plot.timeline_span.start_marker.clone(),
+            event_type: EventType::Plot,
+            description: format!("Beginning of {}", plot.name),
+            affected_plots: vec![plot.id.clone()],
+            affected_characters: plot.main_characters.clone(),
+            location: plot.key_locations.first().cloned().unwrap_or_default(),
+            significance: EventSignificance::Major,
+        };
+        events.push(event);
+    }
+
+    let mut current_markers = std::collections::HashMap::new();
+    for plot in plot_threads {
+        current_markers.insert(plot.id.clone(), plot.timeline_span.start_marker.clone());
+    }
+
+    Ok(Timeline {
+        events,
+        current_time_markers: current_markers,
+        temporal_structure: TemporalStructure::Parallel,
+    })
+}
+
+fn create_basic_world_rules(genre: &str) -> Result<Vec<WorldRule>> {
+    let mut rules = Vec::new();
+
+    match genre.to_lowercase().as_str() {
+        "fantasy" => {
+            rules.push(WorldRule {
+                id: "magic_system".to_string(),
+                rule_type: RuleType::Magic,
+                description: "Magic system rules and limitations".to_string(),
+                scope: RuleScope::Global,
+                consistency_notes: vec!["Define magic costs, limitations, and consequences".to_string()],
+            });
+        },
+        "sci-fi" | "science fiction" => {
+            rules.push(WorldRule {
+                id: "tech_level".to_string(),
+                rule_type: RuleType::Physics,
+                description: "Technology level and scientific constraints".to_string(),
+                scope: RuleScope::Global,
+                consistency_notes: vec!["Maintain consistent tech capabilities across storylines".to_string()],
+            });
+        },
+        _ => {
+            rules.push(WorldRule {
+                id: "social_structure".to_string(),
+                rule_type: RuleType::Social,
+                description: "Social and political structures".to_string(),
+                scope: RuleScope::Global,
+                consistency_notes: vec!["Keep social dynamics consistent across plots".to_string()],
+            });
+        }
+    }
+
+    Ok(rules)
+}
+
+async fn generate_multiplot_outline(content: &Content) -> Result<String> {
+    if let Some(ref world_state) = content.world_state {
+        let mut outline = format!("# {} - Multi-Plot Outline\n\n", content.title);
+        outline.push_str("## World Overview\n");
+        outline.push_str(&format!("Premise: {}\n", content.premise));
+        outline.push_str(&format!("Narrative Style: {:?}\n\n", world_state.narrative_style));
+        
+        outline.push_str("## Plot Threads\n");
+        for plot in &world_state.plot_threads {
+            outline.push_str(&format!("### {} ({:?})\n", plot.name, plot.plot_type));
+            outline.push_str(&format!("- Theme: {}\n", plot.theme));
+            outline.push_str(&format!("- Characters: {}\n", plot.main_characters.join(", ")));
+            outline.push_str(&format!("- Locations: {}\n", plot.key_locations.join(", ")));
+            outline.push_str(&format!("- Description: {}\n\n", plot.description));
+        }
+        
+        Ok(outline)
+    } else {
+        Ok("Standard book outline".to_string())
+    }
+}
+
+async fn generate_multiplot_chapters(content: &mut Content, model: &str) -> Result<()> {
+    if let Some(ref world_state) = content.world_state {
+        let total_chapters = content.metadata.target_sections;
+        let active_plots = &world_state.active_plots;
+        
+        println!("📚 Generating {} chapters across {} plot threads", total_chapters, active_plots.len());
+        
+        let progress_bar = ProgressBar::new(total_chapters as u64);
+        progress_bar.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({eta})")
+            .unwrap()
+            .progress_chars("#>-"));
+        
+        for chapter_num in 1..=total_chapters {
+            // Determine which plot thread this chapter should focus on
+            let plot_index = (chapter_num - 1) % active_plots.len();
+            let current_plot_id = &active_plots[plot_index];
+            
+            // Find the plot thread
+            let current_plot = world_state.plot_threads
+                .iter()
+                .find(|p| p.id == *current_plot_id)
+                .unwrap();
+            
+            progress_bar.set_message(format!("Writing Chapter {}: {} storyline", chapter_num, current_plot.name));
+            
+            // Generate chapter with plot context
+            let chapter_content = generate_multiplot_chapter(
+                content, 
+                chapter_num, 
+                current_plot, 
+                world_state, 
+                model
+            ).await?;
+            
+            // Create narrative context
+            let narrative_context = NarrativeContext {
+                plot_thread_id: current_plot.id.clone(),
+                point_of_view: PointOfView::ThirdPersonLimited(
+                    current_plot.main_characters.first().cloned().unwrap_or_default()
+                ),
+                time_marker: world_state.timeline.current_time_markers
+                    .get(&current_plot.id)
+                    .cloned()
+                    .unwrap_or_default(),
+                primary_location: current_plot.key_locations.first().cloned().unwrap_or_default(),
+                active_characters: current_plot.main_characters.clone(),
+                narrative_tension: TensionLevel::Building,
+                context_notes: vec![format!("Chapter focuses on {}", current_plot.name)],
+            };
+            
+            // Create section with plot thread assignment
+            let section = Section {
+                number: chapter_num,
+                title: format!("Chapter {}: {}", chapter_num, 
+                    generate_chapter_title(current_plot, chapter_num)?),
+                content: chapter_content,
+                word_count: 0, // Will be calculated
+                outline: format!("Chapter focusing on {} plot thread", current_plot.name),
+                section_type: SectionType::Chapter,
+                created_at: Utc::now(),
+                completed: true,
+                plot_thread: Some(current_plot.id.clone()),
+                narrative_context: Some(narrative_context),
+            };
+            
+            let word_count = count_words(&section.content);
+            let mut section = section;
+            section.word_count = word_count;
+            
+            content.sections.push(section);
+            content.metadata.current_word_count += word_count;
+            
+            progress_bar.inc(1);
+        }
+        
+        progress_bar.finish_with_message("Multi-plot saga generation completed!");
+    }
+    
+    Ok(())
+}
+
+async fn generate_multiplot_chapter(
+    content: &Content,
+    chapter_num: usize,
+    current_plot: &PlotThread,
+    world_state: &WorldState,
+    model: &str
+) -> Result<String> {
+    let ollama_client = OllamaClient::new("http://localhost:11434".to_string())?;
+    
+    // Build context from world state and other plots
+    let plot_context = build_multiplot_context(content, current_plot, world_state, chapter_num)?;
+    
+    let prompt = format!(
+        "You are writing Chapter {} of a multi-plot saga titled '{}'. 
+        
+        PLOT FOCUS: This chapter focuses on the '{}' storyline.
+        Plot Type: {:?}
+        Theme: {}
+        
+        CHARACTERS IN THIS CHAPTER: {}
+        LOCATIONS: {}
+        CURRENT STAGE: {:?}
+        
+        WORLD CONTEXT:
+        {}
+        
+        WRITING INSTRUCTIONS:
+        - Write approximately 2000-3000 words
+        - Focus primarily on the {} plot thread
+        - Maintain consistency with the established world and other storylines
+        - Include references or hints to other ongoing plots when natural
+        - Advance this specific plot thread meaningfully
+        - Use proper chapter formatting with scene breaks if needed
+        
+        Begin Chapter {}:",
+        
+        chapter_num,
+        content.title,
+        current_plot.name,
+        current_plot.plot_type,
+        current_plot.theme,
+        current_plot.main_characters.join(", "),
+        current_plot.key_locations.join(", "),
+        current_plot.current_stage,
+        plot_context,
+        current_plot.name,
+        chapter_num
+    );
+    
+    ollama_client.generate_text(model, &prompt, 2500, 0.7).await
+}
+
+fn build_multiplot_context(
+    content: &Content,
+    current_plot: &PlotThread,
+    world_state: &WorldState,
+    chapter_num: usize
+) -> Result<String> {
+    let mut context = String::new();
+    
+    // Add premise and world info
+    context.push_str(&format!("Overall Story: {}\n", content.premise));
+    context.push_str(&format!("Genre: {}\n", content.genre));
+    context.push_str(&format!("Narrative Style: {:?}\n\n", world_state.narrative_style));
+    
+    // Add info about other active plots
+    context.push_str("OTHER ONGOING STORYLINES:\n");
+    for plot in &world_state.plot_threads {
+        if plot.id != current_plot.id {
+            context.push_str(&format!("- {}: {} (Characters: {})\n", 
+                plot.name, 
+                plot.description, 
+                plot.main_characters.join(", ")
+            ));
+        }
+    }
+    context.push('\n');
+    
+    // Add recent events from timeline
+    context.push_str("RECENT EVENTS:\n");
+    for event in world_state.timeline.events.iter().take(5) {
+        if event.affected_plots.contains(&current_plot.id) {
+            context.push_str(&format!("- {}: {}\n", event.time_marker, event.description));
+        }
+    }
+    context.push('\n');
+    
+    // Add character relationships relevant to this plot
+    context.push_str("CHARACTER RELATIONSHIPS:\n");
+    for character in &world_state.characters {
+        if current_plot.main_characters.contains(&character.name) {
+            for relationship in &character.relationships {
+                context.push_str(&format!("- {} has {} relationship with {}\n",
+                    character.name,
+                    format!("{:?}", relationship.relationship_type).to_lowercase(),
+                    relationship.other_character_id
+                ));
+            }
+        }
+    }
+    
+    // Add previous chapters context if any
+    if chapter_num > 1 {
+        context.push_str("\nPREVIOUS CHAPTER SUMMARIES:\n");
+        let recent_chapters = content.sections.iter()
+            .rev()
+            .take(3)
+            .collect::<Vec<_>>();
+        
+        for section in recent_chapters.iter().rev() {
+            if let Some(ref plot_thread) = section.plot_thread {
+                let plot_name = world_state.plot_threads
+                    .iter()
+                    .find(|p| p.id == *plot_thread)
+                    .map(|p| &p.name)
+                    .unwrap_or(plot_thread);
+                
+                context.push_str(&format!("- Chapter {}: {} storyline\n", 
+                    section.number, plot_name));
+            }
+        }
+    }
+    
+    Ok(context)
+}
+
+fn generate_chapter_title(plot: &PlotThread, chapter_num: usize) -> Result<String> {
+    let title = match plot.plot_type {
+        PlotType::MainStory => format!("{} - Part {}", plot.theme.to_title_case(), 
+            ((chapter_num - 1) / 3) + 1),
+        PlotType::Subplot => format!("{} Unfolds", plot.name),
+        PlotType::Backstory => format!("Echoes of {}", plot.theme.to_title_case()),
+        PlotType::Parallel => format!("Meanwhile: {}", plot.name),
+        _ => format!("{} Continues", plot.name),
+    };
+    Ok(title)
+}
+
+// Placeholder functions for continuation and management
+async fn continue_multiplot_book() -> Result<()> {
+    println!("🚧 Multi-plot continuation feature coming soon!");
+    println!("This will allow you to load existing multi-plot books and continue their storylines.");
+    Ok(())
+}
+
+async fn manage_multiplot_world() -> Result<()> {
+    println!("🚧 World management feature coming soon!");
+    println!("This will allow you to edit characters, locations, plot threads, and world rules.");
+    Ok(())
+}
+
+// Helper trait for title case conversion
+trait ToTitleCase {
+    fn to_title_case(&self) -> String;
+}
+
+impl ToTitleCase for str {
+    fn to_title_case(&self) -> String {
+        self.split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 // Generate opening variation guidance to prevent repetitive chapter beginnings

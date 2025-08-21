@@ -48,6 +48,8 @@ pub struct Content {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed: bool,
+    pub world_state: Option<WorldState>, // Multi-plot narrative support
+    pub stylistic_profile: Option<StylisticProfile>, // Literary enhancement system
 }
 
 // Legacy alias for backward compatibility
@@ -63,6 +65,8 @@ pub struct Section {
     pub section_type: SectionType,
     pub created_at: DateTime<Utc>,
     pub completed: bool,
+    pub plot_thread: Option<String>, // Which storyline this section belongs to (plot ID)
+    pub narrative_context: Option<NarrativeContext>, // Timeline, location, POV context
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -184,6 +188,8 @@ impl Content {
             created_at: now,
             updated_at: now,
             completed: false,
+            world_state: None, // Initialize without multi-plot system by default
+            stylistic_profile: None, // Initialize without stylistic enhancements by default
         }
     }
     
@@ -229,6 +235,8 @@ impl Content {
             created_at: now,
             updated_at: now,
             completed: false,
+            world_state: None,
+            stylistic_profile: Some(StylisticProfile::default()),
         }
     }
     
@@ -274,6 +282,8 @@ impl Content {
             created_at: now,
             updated_at: now,
             completed: false,
+            world_state: None,
+            stylistic_profile: Some(StylisticProfile::default()),
         }
     }
     
@@ -805,6 +815,8 @@ impl Section {
             section_type,
             created_at: Utc::now(),
             completed: false,
+            plot_thread: None, // No plot assignment by default
+            narrative_context: None, // No narrative context by default
         }
     }
     
@@ -1390,6 +1402,793 @@ impl Default for WritingAdjustments {
             sentence_style: "mixed".to_string(),
             dialogue_density: 0.6,
             description_depth: 0.7,
+        }
+    }
+}
+
+// Multi-Plot Narrative System Structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorldState {
+    pub characters: Vec<MultiPlotCharacter>,
+    pub locations: Vec<Location>,
+    pub plot_threads: Vec<PlotThread>,
+    pub timeline: Timeline,
+    pub world_rules: Vec<WorldRule>,
+    pub active_plots: Vec<String>, // Plot IDs currently being developed
+    pub narrative_style: NarrativeStyle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MultiPlotCharacter {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub role: CharacterRole,
+    pub affiliations: Vec<String>, // Plot threads they're involved in
+    pub current_status: CharacterStatus,
+    pub timeline_appearances: Vec<TimelineEntry>,
+    pub character_arc: Option<String>,
+    pub relationships: Vec<CharacterRelationship>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Location {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub location_type: LocationType,
+    pub time_period: Option<String>,
+    pub connected_locations: Vec<String>,
+    pub significance: Vec<String>, // Plot threads that use this location
+    pub current_state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotThread {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub plot_type: PlotType,
+    pub status: PlotStatus,
+    pub main_characters: Vec<String>, // Character IDs
+    pub key_locations: Vec<String>, // Location IDs
+    pub timeline_span: TimeSpan,
+    pub theme: String,
+    pub current_stage: PlotStage,
+    pub intersections: Vec<PlotIntersection>, // How this plot connects with others
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Timeline {
+    pub events: Vec<TimelineEvent>,
+    pub current_time_markers: std::collections::HashMap<String, String>, // Plot ID -> current time
+    pub temporal_structure: TemporalStructure,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorldRule {
+    pub id: String,
+    pub rule_type: RuleType,
+    pub description: String,
+    pub scope: RuleScope, // Which parts of the world this affects
+    pub consistency_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NarrativeContext {
+    pub plot_thread_id: String,
+    pub point_of_view: PointOfView,
+    pub time_marker: String,
+    pub primary_location: String,
+    pub active_characters: Vec<String>,
+    pub narrative_tension: TensionLevel,
+    pub context_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineEntry {
+    pub plot_thread_id: String,
+    pub time_marker: String,
+    pub event_description: String,
+    pub character_state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterRelationship {
+    pub other_character_id: String,
+    pub relationship_type: RelationshipType,
+    pub description: String,
+    pub plot_relevance: Vec<String>, // Which plots this relationship affects
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineEvent {
+    pub id: String,
+    pub time_marker: String,
+    pub event_type: EventType,
+    pub description: String,
+    pub affected_plots: Vec<String>,
+    pub affected_characters: Vec<String>,
+    pub location: String,
+    pub significance: EventSignificance,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlotIntersection {
+    pub other_plot_id: String,
+    pub intersection_type: IntersectionType,
+    pub description: String,
+    pub timing: String, // When in the narrative this happens
+    pub impact_level: ImpactLevel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimeSpan {
+    pub start_marker: String,
+    pub end_marker: Option<String>, // None if ongoing
+    pub duration_description: String,
+}
+
+// Enums for the multi-plot system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NarrativeStyle {
+    Linear,        // Traditional single-plot progression
+    Parallel,      // Multiple simultaneous storylines
+    Interwoven,    // Plots that regularly intersect
+    Episodic,      // Separate but connected episodes
+    Cyclical,      // Storylines that repeat themes/structures
+    Experimental,  // Non-traditional narrative structures
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CharacterRole {
+    Protagonist,
+    Antagonist,
+    Supporting,
+    Background,
+    PlotDevice,
+    Narrator,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CharacterStatus {
+    Active,     // Currently involved in the narrative
+    Inactive,   // Not currently in the story
+    Mentioned,  // Referenced but not present
+    Unknown,    // Status unclear
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LocationType {
+    City,
+    Building,
+    Natural,
+    Fantastical,
+    Conceptual, // Abstract or metaphorical locations
+    Traveling,  // Moving locations (ships, caravans, etc.)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PlotType {
+    MainStory,      // Primary narrative arc
+    Subplot,        // Secondary storyline
+    Backstory,      // Historical context/flashbacks
+    Parallel,       // Simultaneous alternate storyline
+    Framing,        // Story-within-a-story setup
+    Thematic,       // Reinforces themes rather than advancing plot
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PlotStatus {
+    Planning,       // Being outlined
+    Active,         // Currently being written
+    Paused,         // Temporarily set aside
+    Resolved,       // Completed
+    Abandoned,      // No longer being developed
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PlotStage {
+    Introduction,   // Setting up the storyline
+    Development,    // Building tension/complexity
+    Climax,         // Peak dramatic moment
+    Resolution,     // Wrapping up the thread
+    Aftermath,      // Consequences/epilogue
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TemporalStructure {
+    Chronological,  // Events in time order
+    Flashbacks,     // Past events interspersed
+    Parallel,       // Multiple time periods simultaneously
+    NonLinear,      // Complex time structure
+    Cyclical,       // Repeating time patterns
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RuleType {
+    Physics,        // How the world works physically
+    Magic,          // Supernatural rules
+    Social,         // Cultural/political structures
+    Economic,       // How commerce/resources work
+    Linguistic,     // Language rules
+    Narrative,      // Story-specific constraints
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RuleScope {
+    Global,         // Affects entire world
+    Regional,       // Specific area
+    PlotSpecific,   // Only relevant to certain storylines
+    Character,      // Applies to specific characters
+    Temporal,       // Time-period specific
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PointOfView {
+    FirstPerson(String),    // Character ID for "I" narrator
+    ThirdPersonLimited(String), // Character ID for limited POV
+    ThirdPersonOmniscient,  // All-knowing narrator
+    SecondPerson,           // "You" narrator (rare)
+    Multiple,               // Switching between characters
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TensionLevel {
+    Low,            // Calm, exposition
+    Building,       // Rising tension
+    High,           // Intense drama/action
+    Climactic,      // Peak tension
+    Release,        // Resolution/aftermath
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RelationshipType {
+    Family,
+    Romantic,
+    Friendship,
+    Professional,
+    Adversarial,
+    Mentor,
+    Unknown,
+    Complex,        // Multiple or changing relationships
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventType {
+    Plot,           // Advances storyline
+    Character,      // Character development
+    World,          // World-building
+    Conflict,       // Introduces/resolves conflict
+    Revelation,     // Information revealed
+    Transition,     // Scene/time/location change
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventSignificance {
+    Minor,          // Small detail
+    Moderate,       // Noticeable but not crucial
+    Major,          // Important plot point
+    Critical,       // Pivotal moment
+    Climactic,      // Peak dramatic moment
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum IntersectionType {
+    CharacterMeeting,   // Characters from different plots meet
+    SharedEvent,        // Same event affects multiple plots
+    CauseEffect,        // One plot causes events in another
+    Thematic,           // Plots share themes/parallels
+    LocationBased,      // Plots occur in same location
+    Temporal,           // Time-based connection
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ImpactLevel {
+    Minimal,        // Barely affects other plot
+    Low,            // Small influence
+    Moderate,       // Noticeable impact
+    High,           // Significant effect
+    Transformative, // Fundamentally changes other plot
+}
+
+// Advanced Literary Stylistic Enhancement System
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StylisticProfile {
+    pub narrative_voice: NarrativeVoice,
+    pub tone_modulation: ToneModulation,
+    pub symbolic_elements: Vec<SymbolicElement>,
+    pub pacing_profile: PacingProfile,
+    pub figurative_language: FigurativeLanguageSystem,
+    pub dialogue_system: DialogueSystem,
+    pub sensory_profile: SensoryProfile,
+    pub genre_overlays: Vec<GenreOverlay>,
+    pub meta_narrative: Option<MetaNarrativeElements>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NarrativeVoice {
+    pub primary_pov: PointOfViewStyle,
+    pub voice_consistency: VoiceConsistency,
+    pub reliability: NarratorReliability,
+    pub intimacy_level: IntimacyLevel,
+    pub temporal_perspective: TemporalPerspective,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToneModulation {
+    pub base_tone: EmotionalTone,
+    pub dynamic_shifts: Vec<ToneShift>,
+    pub tone_triggers: Vec<ToneTrigger>,
+    pub intensity_curve: IntensityCurve,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolicElement {
+    pub id: String,
+    pub symbol_type: SymbolType,
+    pub core_meaning: String,
+    pub evolution_stages: Vec<SymbolEvolution>,
+    pub context_associations: Vec<ContextAssociation>,
+    pub recurrence_pattern: RecurrencePattern,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PacingProfile {
+    pub default_rhythm: WritingRhythm,
+    pub scene_pacing: std::collections::HashMap<String, ScenePacing>, // Scene type -> pacing
+    pub tension_curve: Vec<PacingPoint>,
+    pub breath_patterns: Vec<BreathPattern>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FigurativeLanguageSystem {
+    pub character_metaphor_styles: std::collections::HashMap<String, MetaphorStyle>, // Character -> style
+    pub thematic_imagery: Vec<ImageryTheme>,
+    pub figurative_density: FigurativeDensity,
+    pub contextual_triggers: Vec<FigurativeTrigger>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DialogueSystem {
+    pub character_voices: std::collections::HashMap<String, CharacterVoice>, // Character -> voice
+    pub subtext_engine: SubtextEngine,
+    pub power_dynamics: PowerDynamicsTracker,
+    pub dialogue_tags: DialogueTagStyle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensoryProfile {
+    pub sensory_priorities: Vec<SensoryChannel>,
+    pub descriptive_density: std::collections::HashMap<String, DescriptiveDensity>, // Scene type -> density
+    pub sensory_associations: Vec<SensoryAssociation>,
+    pub synesthesia_patterns: Vec<SynesthesiaPattern>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenreOverlay {
+    pub genre_type: GenreType,
+    pub intensity: f32, // 0.0-1.0
+    pub stylistic_markers: Vec<StylisticMarker>,
+    pub lexical_preferences: LexicalPreferences,
+    pub structural_influences: StructuralInfluences,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaNarrativeElements {
+    pub self_awareness_level: SelfAwarenessLevel,
+    pub meta_commentary: Vec<MetaCommentary>,
+    pub structural_references: Vec<StructuralReference>,
+    pub reader_address: ReaderAddressStyle,
+}
+
+// Supporting structures for the stylistic system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToneShift {
+    pub trigger: String,
+    pub from_tone: EmotionalTone,
+    pub to_tone: EmotionalTone,
+    pub transition_style: TransitionStyle,
+    pub duration: ToneShiftDuration,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolEvolution {
+    pub stage: String,
+    pub meaning_shift: String,
+    pub context_change: String,
+    pub manifestation: SymbolManifestation,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScenePacing {
+    pub sentence_length: SentenceLength,
+    pub paragraph_structure: ParagraphStructure,
+    pub rhythm_pattern: RhythmPattern,
+    pub tension_markers: Vec<TensionMarker>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterVoice {
+    pub idiolect: Idiolect,
+    pub speech_patterns: Vec<SpeechPattern>,
+    pub vocabulary_level: VocabularyLevel,
+    pub emotional_markers: Vec<EmotionalMarker>,
+    pub power_indicators: PowerIndicators,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageryTheme {
+    pub theme_name: String,
+    pub core_images: Vec<String>,
+    pub metaphorical_domains: Vec<MetaphoricalDomain>,
+    pub emotional_resonance: EmotionalResonance,
+}
+
+// Enums for the stylistic system
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PointOfViewStyle {
+    FirstPersonIntimate,    // "I felt..."
+    FirstPersonDetached,    // "I observed..."
+    ThirdPersonLimited,     // Close to one character
+    ThirdPersonOmniscient,  // All-knowing
+    ThirdPersonObjective,   // Camera-like
+    SecondPersonDirect,     // "You walk..."
+    StreamOfConsciousness, // Joyce/Woolf style
+    Epistolary,            // Letters, documents
+    MultipleNarrators,     // Switching POVs
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EmotionalTone {
+    Melancholic,   // Deep sadness, reflection
+    Euphoric,      // Joy, excitement
+    Ironic,        // Dry, sardonic
+    Clinical,      // Detached, analytical
+    Lyrical,       // Poetic, flowing
+    Urgent,        // Immediate, pressing
+    Contemplative, // Thoughtful, philosophical
+    Bitter,        // Resentful, harsh
+    Whimsical,     // Playful, light
+    Ominous,       // Foreboding, dark
+    Nostalgic,     // Wistful, remembering
+    Passionate,    // Intense, fervent
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SymbolType {
+    ObjectSymbol,     // Physical objects with meaning
+    ColorSymbol,      // Color-based symbolism
+    NatureSymbol,     // Natural elements
+    ArchetypalSymbol, // Universal symbols
+    PersonalSymbol,   // Character-specific
+    CulturalSymbol,   // Society-specific
+    MetaSymbol,       // Self-referential
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WritingRhythm {
+    Staccato,      // Short, choppy sentences
+    Flowing,       // Long, connected prose
+    Syncopated,    // Irregular, jazz-like
+    Hypnotic,      // Repetitive, trance-like
+    Conversational, // Natural speech patterns
+    Formal,        // Structured, academic
+    Breathless,    // Run-on, urgent
+    Measured,      // Careful, deliberate
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SensoryChannel {
+    Visual,      // Sight-based descriptions
+    Auditory,    // Sound and hearing
+    Tactile,     // Touch and texture
+    Olfactory,   // Smell
+    Gustatory,   // Taste
+    Kinesthetic, // Movement and position
+    Emotional,   // Emotional sensations
+    Synesthetic, // Combined senses
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GenreType {
+    NoirCrime,        // Dark, urban, cynical
+    GothicHorror,     // Atmospheric, sublime
+    SciFiHard,        // Technical, precise
+    SciFiSoft,        // Social, speculative
+    MagicalRealism,   // Subtle fantastic elements
+    HistoricalLiterary, // Period-appropriate, literary
+    ContemporaryLiterary, // Modern literary fiction
+    RomanticDrama,    // Emotional, relationship-focused
+    ThrillerSuspense, // Fast-paced, tense
+    FantasyEpic,      // Grand, mythic
+    PostModern,       // Experimental, fragmented
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SelfAwarenessLevel {
+    None,        // Traditional narrative
+    Subtle,      // Occasional nods to structure
+    Moderate,    // Regular meta-commentary
+    Explicit,    // Direct reader address
+    Experimental, // Postmodern techniques
+}
+
+// Additional supporting enums
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VoiceConsistency {
+    Rigid,       // Never changes
+    Stable,      // Minor variations
+    Fluid,       // Adapts to situation
+    Chameleon,   // Major shifts
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NarratorReliability {
+    Reliable,        // Trustworthy narrator
+    SlightlyUnreliable, // Minor inconsistencies
+    ModeratelyUnreliable, // Significant bias/gaps
+    HighlyUnreliable, // Major deception/delusion
+    UnknownReliability, // Ambiguous
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum IntimacyLevel {
+    Distant,     // Formal, removed
+    Professional, // Respectful distance
+    Friendly,    // Warm but boundaried
+    Intimate,    // Personal, close
+    Confessional, // Very personal
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FigurativeDensity {
+    Sparse,      // Minimal figurative language
+    Moderate,    // Balanced use
+    Rich,        // Frequent metaphors/similes
+    Lyrical,     // Poetry-like density
+    Experimental, // Unusual combinations
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SentenceLength {
+    VeryShort,   // 1-5 words average
+    Short,       // 6-10 words average
+    Medium,      // 11-20 words average
+    Long,        // 21-30 words average
+    VeryLong,    // 30+ words average
+    Mixed,       // Varied lengths
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VocabularyLevel {
+    Simple,      // Common words
+    Standard,    // Educated level
+    Sophisticated, // Advanced vocabulary
+    Archaic,     // Period/formal language
+    Technical,   // Specialized terms
+    Poetic,      // Lyrical language
+    Vernacular,  // Colloquial/slang
+}
+
+// Implementation structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToneTrigger {
+    pub trigger_type: TriggerType,
+    pub condition: String,
+    pub target_tone: EmotionalTone,
+    pub strength: f32, // 0.0-1.0
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextAssociation {
+    pub context: String,
+    pub association_strength: f32,
+    pub emotional_valence: EmotionalValence,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaphorStyle {
+    pub primary_domain: MetaphoricalDomain,
+    pub secondary_domains: Vec<MetaphoricalDomain>,
+    pub complexity_level: ComplexityLevel,
+    pub originality: OriginalityLevel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpeechPattern {
+    pub pattern_type: SpeechPatternType,
+    pub frequency: f32, // 0.0-1.0
+    pub examples: Vec<String>,
+    pub context_triggers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StylisticMarker {
+    pub marker_type: MarkerType,
+    pub implementation: String,
+    pub frequency: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TriggerType {
+    EmotionalState,
+    PlotEvent,
+    CharacterInteraction,
+    Setting,
+    Time,
+    Theme,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum MetaphoricalDomain {
+    Nature,      // Plants, animals, weather
+    Architecture, // Buildings, structures
+    Music,       // Sound, rhythm, harmony
+    War,         // Battle, conflict
+    Journey,     // Travel, paths
+    Ocean,       // Water, tides, depths
+    Light,       // Illumination, shadow
+    Fire,        // Heat, burning, destruction
+    Art,         // Painting, sculpture
+    Technology,  // Modern metaphors
+    Body,        // Physical, anatomical
+    Mind,        // Psychology, consciousness
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EmotionalValence {
+    VeryNegative,
+    Negative,
+    Neutral,
+    Positive,
+    VeryPositive,
+    Ambivalent, // Mixed emotions
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SpeechPatternType {
+    Interruption,    // Often cuts off mid-sentence
+    Repetition,      // Repeats words/phrases
+    Hesitation,      // Uses filler words
+    Formality,       // Formal speech patterns
+    Colloquialism,   // Uses slang/informal
+    Precision,       // Very exact word choice
+    Rambling,        // Long, wandering sentences
+    Clipped,         // Short, to the point
+}
+
+// Placeholder types for complex structures
+pub type IntensityCurve = Vec<(f32, EmotionalTone)>; // Time -> Tone intensity
+pub type SubtextEngine = Vec<SubtextRule>; // TODO: implement SubtextRule
+// SubtextRule struct defined below
+pub type PowerDynamicsTracker = std::collections::HashMap<String, f32>; // Character power levels
+// StylisticMarker struct defined below, removing duplicate type alias
+pub type RecurrencePattern = Vec<i32>; // Section numbers where symbol appears
+pub type BreathPattern = Vec<PacingPoint>;
+pub type PacingPoint = (usize, f32); // Position, intensity
+pub type SymbolManifestation = String;
+pub type TemporalPerspective = String;
+pub type TransitionStyle = String;
+pub type ToneShiftDuration = String;
+pub type ParagraphStructure = String;
+pub type RhythmPattern = String;
+pub type TensionMarker = String;
+pub type Idiolect = Vec<String>;
+pub type EmotionalMarker = String;
+pub type PowerIndicators = Vec<String>;
+pub type EmotionalResonance = f32;
+pub type DialogueTagStyle = String;
+pub type DescriptiveDensity = f32;
+pub type SensoryAssociation = String;
+pub type SynesthesiaPattern = String;
+pub type LexicalPreferences = Vec<String>;
+pub type StructuralInfluences = Vec<String>;
+pub type MetaCommentary = String;
+pub type StructuralReference = String;
+pub type ReaderAddressStyle = String;
+pub type ComplexityLevel = f32;
+pub type OriginalityLevel = f32;
+pub type MarkerType = String;
+pub type PowerLevel = f32;
+pub type FigurativeTrigger = String;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubtextRule {
+    pub surface_meaning: String,
+    pub hidden_meaning: String,
+    pub revelation_method: RevelationMethod,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RevelationMethod {
+    Implication,   // Suggested through context
+    Contradiction, // Actions contradict words
+    Repetition,    // Emphasized through patterns
+    Omission,      // What's not said
+    Timing,        // When something is said
+}
+
+// Default implementations for stylistic profile system
+impl Default for StylisticProfile {
+    fn default() -> Self {
+        Self {
+            narrative_voice: NarrativeVoice::default(),
+            tone_modulation: ToneModulation::default(),
+            symbolic_elements: Vec::new(),
+            pacing_profile: PacingProfile::default(),
+            figurative_language: FigurativeLanguageSystem::default(),
+            dialogue_system: DialogueSystem::default(),
+            sensory_profile: SensoryProfile::default(),
+            genre_overlays: Vec::new(),
+            meta_narrative: None,
+        }
+    }
+}
+
+impl Default for NarrativeVoice {
+    fn default() -> Self {
+        Self {
+            primary_pov: PointOfViewStyle::ThirdPersonLimited,
+            voice_consistency: VoiceConsistency::Stable,
+            reliability: NarratorReliability::Reliable,
+            intimacy_level: IntimacyLevel::Friendly,
+            temporal_perspective: "present".to_string(),
+        }
+    }
+}
+
+impl Default for ToneModulation {
+    fn default() -> Self {
+        Self {
+            base_tone: EmotionalTone::Contemplative,
+            dynamic_shifts: Vec::new(),
+            tone_triggers: Vec::new(),
+            intensity_curve: Vec::new(), // Vec<(f32, EmotionalTone)>
+        }
+    }
+}
+
+impl Default for PacingProfile {
+    fn default() -> Self {
+        Self {
+            default_rhythm: WritingRhythm::Conversational,
+            scene_pacing: std::collections::HashMap::new(),
+            tension_curve: Vec::new(),
+            breath_patterns: Vec::new(),
+        }
+    }
+}
+
+impl Default for FigurativeLanguageSystem {
+    fn default() -> Self {
+        Self {
+            character_metaphor_styles: std::collections::HashMap::new(),
+            thematic_imagery: Vec::new(),
+            figurative_density: FigurativeDensity::Moderate,
+            contextual_triggers: Vec::new(),
+        }
+    }
+}
+
+impl Default for DialogueSystem {
+    fn default() -> Self {
+        Self {
+            character_voices: std::collections::HashMap::new(),
+            subtext_engine: Vec::new(), // Vec<SubtextRule>
+            power_dynamics: std::collections::HashMap::new(), // HashMap<String, f32>  
+            dialogue_tags: "minimal".to_string(),
+        }
+    }
+}
+
+impl Default for SensoryProfile {
+    fn default() -> Self {
+        Self {
+            sensory_priorities: vec![SensoryChannel::Visual],
+            descriptive_density: std::collections::HashMap::new(),
+            sensory_associations: Vec::new(),
+            synesthesia_patterns: Vec::new(),
         }
     }
 }
