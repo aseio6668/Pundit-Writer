@@ -1514,149 +1514,125 @@ pub async fn interactive_mode() -> Result<()> {
         println!("I'll help you choose the perfect content type and guide you through the creation process.");
         println!();
         
-        // First choice: new content or continue existing work
-        let mode_options = vec![
-            "🆕 Create new content from scratch",
-            "📂 Continue existing work (add to existing files)",
-            "❌ Exit",
-        ];
-        
-        let mode_choice = Select::new()
-            .with_prompt("What would you like to do?")
-            .items(&mode_options)
-            .default(0)
-            .interact()?;
-        
-        match mode_choice {
-            0 => {
-                // Create new content - continue to content selection
-                'content: loop {
-                    // Content type selection
-                    let content_types = vec![
-                        "📚 Book - Traditional long-form narrative",
-                        "🎬 Screenplay - Movie script with professional formatting",
-                        "🎭 Stage Play - Theater script with stage directions",
-                        "🔬 Technical Documentation - Manuals, APIs, guides",
-                        "📊 Research & White Papers - Reports, case studies, analysis",
-                        "🎨 Poetry - Sonnets, haiku, free verse, and more",
-                        "📝 Marketing Content - Ads, press releases, media kits",
-                        "📰 Blog & SEO Articles - Posts, tutorials, reviews",
-                        "📋 Strategic Planning - Business plans, roadmaps, vision docs",
-                        "📅 Meeting Documentation - Notes, summaries, action items",
-                        "📺 TV Script - Television episode or series",
-                        "🎧 Audio Script - Podcast, radio play, or audio drama",
-                        "🎮 Game Script - Interactive dialogue with branching choices",
-                        "📄 Business Document - Professional or technical document",
-                        "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
-                        "🎓 Educational Lesson - Language learning, tutorials, instruction",
-                        "👶 Children's Book - Age-appropriate stories and learning",
-                        "← Back to mode selection",
-                    ];
-                    
-                    let content_idx = Select::new()
-                        .with_prompt("What type of content would you like to create?")
-                        .items(&content_types)
-                        .default(0)
-                        .interact()?;
-                    
-                    if content_idx == content_types.len() - 1 {
-                        // Go back to mode selection
-                        continue 'main;
-                    }
-                    
-                    let result = match content_idx {
-        0 => {
-            // Redirect to existing narrate mode for books
-            narrate_mode().await
-        },
-        1 => {
-            // Screenplay creation
-            interactive_screenplay_creation().await
-        },
-        2 => {
-            // Stage play creation
-            interactive_play_creation().await
-        },
-        3 => {
-            // Technical documentation
-            interactive_technical_doc_creation().await
-        },
-        4 => {
-            // Research & white papers
-            interactive_research_doc_creation().await
-        },
-        5 => {
-            // Poetry creation
-            interactive_poetry_creation().await
-        },
-        6 => {
-            // Marketing content
-            interactive_marketing_creation().await
-        },
-        7 => {
-            // Blog & SEO articles
-            interactive_blog_creation().await
-        },
-        8 => {
-            // Strategic planning
-            interactive_strategic_doc_creation().await
-        },
-        9 => {
-            // Meeting documentation
-            interactive_meeting_doc_creation().await
-        },
-        10 => {
-            // TV script creation
-            interactive_tv_creation().await
-        },
-        11 => {
-            // Audio script creation
-            interactive_audio_creation().await
-        },
-        12 => {
-            // Game script creation
-            interactive_game_creation().await
-        },
-        13 => {
-            // Document creation
-            interactive_document_creation().await
-        },
-        14 => {
-            // Dictionary creation
-            interactive_dictionary_creation().await
-        },
-        15 => {
-            // Educational lesson creation
-            interactive_educational_lesson_creation().await
-        },
-        16 => {
-            // Children's book creation
-            interactive_childrens_book_creation().await
-        },
-                        _ => {
-                            println!("Invalid selection");
-                            Ok(())
-                        }
-                    };
-                    
-                    // Handle the result - if it succeeded, return from the function
-                    match result {
-                        Ok(_) => return Ok(()),
-                        Err(e) => {
-                            println!("Error: {}", e);
-                            // Continue to content selection to allow retry
-                            continue 'content;
-                        }
-                    }
-                }
-            },
-            1 => {
-                // Continue existing work
-                return interactive_continuation_mode().await;
-            },
-            _ => {
+        // Content type selection (each will offer new/continue options)
+        'content: loop {
+            // Content type selection
+            let content_types = vec![
+                "📚 Book - Traditional long-form narrative",
+                "🎬 Screenplay - Movie script with professional formatting",
+                "🎭 Stage Play - Theater script with stage directions",
+                "🔬 Technical Documentation - Manuals, APIs, guides",
+                "📊 Research & White Papers - Reports, case studies, analysis",
+                "🎨 Poetry - Sonnets, haiku, free verse, and more",
+                "📝 Marketing Content - Ads, press releases, media kits",
+                "📰 Blog & SEO Articles - Posts, tutorials, reviews",
+                "📋 Strategic Planning - Business plans, roadmaps, vision docs",
+                "📅 Meeting Documentation - Notes, summaries, action items",
+                "📺 TV Script - Television episode or series",
+                "🎧 Audio Script - Podcast, radio play, or audio drama",
+                "🎮 Game Script - Interactive dialogue with branching choices",
+                "📄 Business Document - Professional or technical document",
+                "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
+                "🎓 Educational Lesson - Language learning, tutorials, instruction",
+                "👶 Children's Book - Age-appropriate stories and learning",
+                "❌ Exit",
+            ];
+            
+            let content_idx = Select::new()
+                .with_prompt("What type of content would you like to create?")
+                .items(&content_types)
+                .default(0)
+                .interact()?;
+            
+            if content_idx == content_types.len() - 1 {
+                // Exit
                 println!("👋 Thanks for using Pundit!");
                 return Ok(());
+            }
+            
+            let result = match content_idx {
+                0 => {
+                    // Books - offer new/continue options
+                    interactive_book_mode().await
+                },
+                1 => {
+                    // Screenplay creation
+                    interactive_screenplay_creation().await
+                },
+                2 => {
+                    // Stage play creation
+                    interactive_play_creation().await
+                },
+                3 => {
+                    // Technical documentation
+                    interactive_technical_doc_creation().await
+                },
+                4 => {
+                    // Research & white papers
+                    interactive_research_doc_creation().await
+                },
+                5 => {
+                    // Poetry creation
+                    interactive_poetry_creation().await
+                },
+                6 => {
+                    // Marketing content
+                    interactive_marketing_creation().await
+                },
+                7 => {
+                    // Blog & SEO articles
+                    interactive_blog_creation().await
+                },
+                8 => {
+                    // Strategic planning
+                    interactive_strategic_doc_creation().await
+                },
+                9 => {
+                    // Meeting documentation
+                    interactive_meeting_doc_creation().await
+                },
+                10 => {
+                    // TV script creation
+                    interactive_tv_creation().await
+                },
+                11 => {
+                    // Audio script creation
+                    interactive_audio_creation().await
+                },
+                12 => {
+                    // Game script creation
+                    interactive_game_creation().await
+                },
+                13 => {
+                    // Document creation
+                    interactive_document_creation().await
+                },
+                14 => {
+                    // Dictionary creation
+                    interactive_dictionary_creation().await
+                },
+                15 => {
+                    // Educational lesson creation
+                    interactive_educational_lesson_creation().await
+                },
+                16 => {
+                    // Children's book creation
+                    interactive_childrens_book_creation().await
+                },
+                _ => {
+                    println!("Invalid selection");
+                    Ok(())
+                }
+            };
+            
+            // Handle the result - if it succeeded, return from the function
+            match result {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    println!("Error: {}", e);
+                    // Continue to content selection to allow retry
+                    continue 'content;
+                }
             }
         }
     }
@@ -8145,4 +8121,299 @@ fn get_science_chapter_title(science_subject: &str, chapter_num: usize, total_ch
         },
         _ => format!("{} Fundamentals", science_subject),
     }
+}
+
+// Helper function for book creation with new/continue options
+async fn interactive_book_mode() -> Result<()> {
+    loop {
+        println!("\n📚 Book Creation Mode");
+        println!("═══════════════════");
+        println!();
+        
+        let mode_options = vec![
+            "🆕 Create a new book from scratch",
+            "📂 Continue/extend an existing book or work",
+            "🔄 Continue as different format (e.g. book from screenplay)",
+            "← Back to content types",
+        ];
+        
+        let mode_choice = Select::new()
+            .with_prompt("What would you like to do?")
+            .items(&mode_options)
+            .default(0)
+            .interact()?;
+        
+        match mode_choice {
+            0 => {
+                // Create new book - use existing narrate mode
+                return narrate_mode().await;
+            },
+            1 => {
+                // Continue existing book - use continuation with book context
+                return interactive_book_continuation().await;
+            },
+            2 => {
+                // Cross-format continuation 
+                return interactive_cross_format_continuation(ContentType::Book).await;
+            },
+            _ => {
+                // Back to content types
+                return Ok(());
+            }
+        }
+    }
+}
+
+// Book-specific continuation that maintains book format
+async fn interactive_book_continuation() -> Result<()> {
+    println!("\n📂 Continue Existing Book");
+    println!("═════════════════════════");
+    println!();
+    
+    // Use existing continuation setup but with book context
+    let project = match interactive_continuation_setup().await {
+        Ok(project) => project,
+        Err(_) => {
+            println!("📂 Returning to book menu...");
+            return Ok(());
+        }
+    };
+    
+    println!("\n✅ Project loaded!");
+    println!("Total files: {}", project.files.len());
+    println!("Total word count: {}", project.total_word_count());
+    
+    // Ensure we're working with book format
+    let mut content = continuation_project_to_content(&project, 
+        "Continued Book".to_string(), 
+        "Author".to_string())?;
+    content.content_type = ContentType::Book;
+    
+    // Get book-specific continuation details
+    let title: String = Input::new()
+        .with_prompt("Book title (for this continuation)")
+        .default("Continued Book".to_string())
+        .interact_text()?;
+    
+    let author: String = Input::new()
+        .with_prompt("Author name")
+        .default("Anonymous".to_string())
+        .interact_text()?;
+    
+    // Book continuation options
+    let continuation_options = vec![
+        "📖 Add new chapters to the existing story",
+        "🔄 Create a sequel/next book in series",
+        "📝 Extend specific scenes or chapters",
+        "🎭 Add character development or backstory",
+    ];
+    
+    let continuation_idx = Select::new()
+        .with_prompt("What type of book continuation would you like?")
+        .items(&continuation_options)
+        .default(0)
+        .interact()?;
+    
+    let continuation_prompt = match continuation_idx {
+        0 => {
+            let chapters: String = Input::new()
+                .with_prompt("How many new chapters would you like to add?")
+                .default("3".to_string())
+                .interact_text()?;
+            format!("Continue this book by adding {} new chapters that build on the existing story. Maintain consistent character development and plot progression.", chapters)
+        },
+        1 => {
+            Input::new()
+                .with_prompt("Describe the sequel/next book (setting, time period, new conflicts)")
+                .interact_text()?
+        },
+        2 => {
+            Input::new()
+                .with_prompt("Which scenes or chapters would you like to extend, and what should be added?")
+                .interact_text()?
+        },
+        3 => {
+            Input::new()
+                .with_prompt("Which characters need development? What backstory or growth should be added?")
+                .interact_text()?
+        },
+        _ => "Continue the book naturally".to_string(),
+    };
+    
+    let target_words: String = Input::new()
+        .with_prompt("Target word count for the continuation")
+        .default("2000".to_string())
+        .interact_text()?;
+    
+    // Use existing continuation logic but with book context
+    let existing_content = project.get_combined_content()?;
+    let target_words_num: usize = target_words.parse().unwrap_or(2000);
+    
+    println!("\n📖 Generating book continuation...");
+    
+    // Create a proper book content object
+    content.title = title.clone();
+    content.author = author.clone();
+    content.genre = "Continued Book".to_string();
+    
+    let continuation_result = write_book_continuation(
+        &content,
+        &continuation_prompt,
+        &existing_content,
+        target_words_num
+    ).await?;
+    
+    // Save the result
+    let output_filename = format!("{}_continuation.md", title.replace(" ", "_").to_lowercase());
+    let output_path = std::path::PathBuf::from(&output_filename);
+    
+    let full_content = format!(
+        "# {} - Continuation\n\nAuthor: {}\nGenerated: {}\n\n## Original Content Context\n\n{}\n\n## New Content\n\n{}\n",
+        title,
+        content.author,
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
+        {
+            let context_limit = 500.min(existing_content.chars().count());
+            let context_preview: String = existing_content.chars().take(context_limit).collect();
+            context_preview
+        },
+        continuation_result
+    );
+    
+    std::fs::write(&output_path, full_content)?;
+    
+    println!("\n✅ Book continuation completed!");
+    println!("💾 Saved to: {}", output_path.display());
+    println!("📊 Generated approximately {} words", continuation_result.split_whitespace().count());
+    
+    Ok(())
+}
+
+// Cross-format continuation (e.g., book from screenplay, etc.)
+async fn interactive_cross_format_continuation(target_format: ContentType) -> Result<()> {
+    println!("\n🔄 Cross-Format Continuation");
+    println!("═══════════════════════════");
+    println!("Convert and continue existing work in a different format");
+    println!();
+    
+    // Load source material
+    let project = match interactive_continuation_setup().await {
+        Ok(project) => project,
+        Err(_) => {
+            println!("📂 Returning to menu...");
+            return Ok(());
+        }
+    };
+    
+    println!("\n✅ Source material loaded!");
+    println!("Total files: {}", project.files.len());
+    println!("Total word count: {}", project.total_word_count());
+    
+    if let Some(ref source_type) = project.project_type {
+        println!("Source format: {:?}", source_type);
+        println!("Target format: {:?}", target_format);
+    }
+    
+    let title: String = Input::new()
+        .with_prompt("Title for the new format")
+        .interact_text()?;
+    
+    let author: String = Input::new()
+        .with_prompt("Author name")
+        .default("Anonymous".to_string())
+        .interact_text()?;
+    
+    let conversion_prompt: String = Input::new()
+        .with_prompt(&format!(
+            "Describe how you want to adapt this to a {:?}. (e.g., 'Create a novel from this screenplay', 'Turn this story into a movie script')",
+            target_format
+        ))
+        .interact_text()?;
+    
+    let target_words: String = Input::new()
+        .with_prompt("Target word count for the adaptation")
+        .default("3000".to_string())
+        .interact_text()?;
+    
+    let existing_content = project.get_combined_content()?;
+    let target_words_num: usize = target_words.parse().unwrap_or(3000);
+    
+    println!("\n🔄 Generating cross-format adaptation...");
+    
+    // Create format-specific prompt
+    let adaptation_prompt = format!(
+        "Adapt the following content to a {:?} format. {}. Source content:\n\n{}",
+        target_format,
+        conversion_prompt,
+        {
+            let source_limit = 2000.min(existing_content.chars().count());
+            let source_preview: String = existing_content.chars().take(source_limit).collect();
+            source_preview
+        }
+    );
+    
+    // Generate the adapted content using Ollama client
+    let ollama_url = "http://localhost:11434".to_string();
+    let ollama_client = OllamaClient::new(ollama_url)?;
+    let model = "llama3.2";
+    
+    let adaptation_result = ollama_client.generate_text(model, &adaptation_prompt, target_words_num as i32, 0.7).await?;
+    
+    // Save the result
+    let output_filename = format!("{}_adapted_{:?}.md", 
+        title.replace(" ", "_").to_lowercase(),
+        target_format
+    );
+    let output_path = std::path::PathBuf::from(&output_filename);
+    
+    let full_content = format!(
+        "# {} - Adapted to {:?}\n\nAuthor: {}\nGenerated: {}\n\nSource Format: {:?}\nTarget Format: {:?}\n\n## Adaptation Notes\n\n{}\n\n## Original Content (Preview)\n\n{}\n\n## Adapted Content\n\n{}\n",
+        title,
+        target_format,
+        author,
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
+        project.project_type.unwrap_or(ContentType::Book),
+        target_format,
+        conversion_prompt,
+        {
+            let context_limit = 500.min(existing_content.chars().count());
+            let context_preview: String = existing_content.chars().take(context_limit).collect();
+            context_preview
+        },
+        adaptation_result
+    );
+    
+    std::fs::write(&output_path, full_content)?;
+    
+    println!("\n✅ Cross-format adaptation completed!");
+    println!("💾 Saved to: {}", output_path.display());
+    println!("📊 Generated approximately {} words", adaptation_result.split_whitespace().count());
+    
+    Ok(())
+}
+
+// Helper function for book continuation generation
+async fn write_book_continuation(
+    _content: &Content,
+    continuation_prompt: &str,
+    existing_content: &str,
+    target_words: usize
+) -> Result<String> {
+    let ollama_url = "http://localhost:11434".to_string();
+    let ollama_client = OllamaClient::new(ollama_url)?;
+    let model = "llama3.2";
+    
+    // Create a comprehensive prompt for book continuation
+    let full_prompt = format!(
+        "You are continuing an existing book. Here is the context:\n\n## Existing Content Preview:\n{}\n\n## Continuation Instructions:\n{}\n\nPlease write a continuation that:\n1. Maintains consistent tone and style with the existing work\n2. Develops characters and plot naturally\n3. Uses proper chapter/section formatting for books\n4. Targets approximately {} words\n\nContinuation:",
+        {
+            let preview_limit = 1500.min(existing_content.chars().count());
+            let preview: String = existing_content.chars().take(preview_limit).collect();
+            preview
+        },
+        continuation_prompt,
+        target_words
+    );
+    
+    ollama_client.generate_text(model, &full_prompt, target_words as i32, 0.7).await
 }
