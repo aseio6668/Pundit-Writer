@@ -896,6 +896,9 @@ async fn write_next_section(
     // Get dynamic length guidance for this section
     let length_guidance = dynamic_length.get_generation_prompt_addition();
     
+    // Analyze previous openings to prevent repetitive patterns
+    let opening_variation_guidance = generate_opening_variation_guidance(content, section_number, &section_type);
+    
     let enhanced_outline = if is_beyond_outline {
         // For unlimited mode chapters beyond the original outline
         format!(
@@ -910,12 +913,15 @@ async fn write_next_section(
             - Advance the story in a meaningful NEW direction
             - If approaching story conclusion, make it DEFINITIVE and FINAL
             
+            {}
+            
             {}",
             section_type_name(&section_type),
             section_number,
             section_number,
             section_outline,
-            length_guidance
+            length_guidance,
+            opening_variation_guidance
         )
     } else {
         // For regular outlined chapters
@@ -928,12 +934,15 @@ async fn write_next_section(
             - Write only the content for THIS specific section
             - Focus on new, original content that continues the story
             
+            {}
+            
             {}",
             section_type_name(&section_type),
             section_number,
             section_number,
             section_outline,
-            length_guidance
+            length_guidance,
+            opening_variation_guidance
         )
     };
     
@@ -8416,4 +8425,248 @@ async fn write_book_continuation(
     );
     
     ollama_client.generate_text(model, &full_prompt, target_words as i32, 0.7).await
+}
+
+// Generate opening variation guidance to prevent repetitive chapter beginnings
+fn generate_opening_variation_guidance(content: &Content, current_section: usize, section_type: &SectionType) -> String {
+    if content.sections.is_empty() {
+        return String::new();
+    }
+    
+    // Analyze previous openings to detect patterns
+    let previous_openings = extract_previous_openings(content, current_section, 5); // Look at last 5 sections
+    let detected_patterns = analyze_opening_patterns(&previous_openings);
+    
+    if detected_patterns.is_empty() {
+        return generate_general_opening_variety_guidance(section_type);
+    }
+    
+    // Generate specific guidance based on detected patterns
+    let mut guidance = vec![];
+    guidance.push("🎨 OPENING VARIATION REQUIREMENTS:".to_string());
+    
+    // Add pattern-specific avoidance instructions
+    for pattern in &detected_patterns {
+        match pattern.pattern_type {
+            OpeningPatternType::RepetitivePhrase => {
+                guidance.push(format!("- AVOID starting with '{}' - this phrase was used {} times recently", 
+                    pattern.phrase, pattern.count));
+                guidance.push(format!("- NEVER begin with variations of '{}' or similar temporal/descriptive phrases", 
+                    pattern.phrase));
+            },
+            OpeningPatternType::SimilarStructure => {
+                guidance.push(format!("- AVOID the sentence structure: {} (used {} times recently)", 
+                    pattern.structure_description, pattern.count));
+            },
+            OpeningPatternType::SameTense => {
+                guidance.push(format!("- Change narrative tense - avoid starting with {} tense (overused recently)", 
+                    pattern.tense));
+            }
+        }
+    }
+    
+    // Add creative alternative suggestions
+    guidance.push("".to_string());
+    guidance.push("✨ CREATIVE OPENING ALTERNATIVES:".to_string());
+    
+    let opening_styles = get_varied_opening_styles(content, section_type);
+    for (i, style) in opening_styles.iter().enumerate().take(3) {
+        guidance.push(format!("{}. {}", i + 1, style));
+    }
+    
+    guidance.join("\n")
+}
+
+// Extract the first 1-3 sentences from previous sections to analyze patterns
+fn extract_previous_openings(content: &Content, current_section: usize, look_back: usize) -> Vec<String> {
+    let mut openings = Vec::new();
+    
+    let start_idx = if current_section > look_back { current_section - look_back } else { 1 };
+    
+    for section in &content.sections {
+        if section.number >= start_idx && section.number < current_section {
+            if !section.content.trim().is_empty() {
+                // Extract first 2 sentences or first 150 characters, whichever is shorter
+                let first_part = extract_opening_sentences(&section.content, 2);
+                let opening = if first_part.chars().count() > 150 {
+                    let truncated: String = first_part.chars().take(150).collect();
+                    format!("{}...", truncated)
+                } else {
+                    first_part
+                };
+                
+                if !opening.trim().is_empty() {
+                    openings.push(opening);
+                }
+            }
+        }
+    }
+    
+    openings
+}
+
+// Extract first N sentences from text
+fn extract_opening_sentences(text: &str, max_sentences: usize) -> String {
+    let sentences: Vec<&str> = text.split(&['.', '!', '?'][..])
+        .filter(|s| !s.trim().is_empty())
+        .collect();
+    
+    let selected = sentences.into_iter()
+        .take(max_sentences)
+        .collect::<Vec<_>>()
+        .join(". ");
+    
+    if selected.ends_with('.') { selected } else { format!("{}.", selected) }
+}
+
+#[derive(Debug, Clone)]
+enum OpeningPatternType {
+    RepetitivePhrase,
+    SimilarStructure,
+    SameTense,
+}
+
+#[derive(Debug, Clone)]
+struct DetectedPattern {
+    pattern_type: OpeningPatternType,
+    phrase: String,
+    structure_description: String,
+    tense: String,
+    count: usize,
+}
+
+// Analyze openings for repetitive patterns
+fn analyze_opening_patterns(openings: &[String]) -> Vec<DetectedPattern> {
+    let mut patterns = Vec::new();
+    
+    // Check for repetitive opening phrases (first 2-3 words)
+    let mut phrase_counts = std::collections::HashMap::new();
+    let mut tense_counts = std::collections::HashMap::new();
+    
+    for opening in openings {
+        if let Some(words) = extract_opening_phrase(opening, 3) {
+            if !words.is_empty() {
+                *phrase_counts.entry(words.clone()).or_insert(0) += 1;
+                
+                // Simple tense detection
+                let tense = detect_opening_tense(&words);
+                *tense_counts.entry(tense.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+    
+    // Report phrases used more than once
+    for (phrase, count) in phrase_counts {
+        if count > 1 {
+            patterns.push(DetectedPattern {
+                pattern_type: OpeningPatternType::RepetitivePhrase,
+                phrase: phrase.clone(),
+                structure_description: String::new(),
+                tense: String::new(),
+                count,
+            });
+        }
+    }
+    
+    // Report overused tenses
+    for (tense, count) in tense_counts {
+        if count > 2 && !tense.is_empty() {
+            patterns.push(DetectedPattern {
+                pattern_type: OpeningPatternType::SameTense,
+                phrase: String::new(),
+                structure_description: String::new(),
+                tense,
+                count,
+            });
+        }
+    }
+    
+    patterns
+}
+
+// Extract first N words as opening phrase
+fn extract_opening_phrase(text: &str, word_count: usize) -> Option<String> {
+    let words: Vec<&str> = text.split_whitespace().take(word_count).collect();
+    if words.len() >= 2 {
+        Some(words.join(" "))
+    } else {
+        None
+    }
+}
+
+// Basic tense detection for opening phrases
+fn detect_opening_tense(phrase: &str) -> String {
+    let lower = phrase.to_lowercase();
+    
+    if lower.starts_with("as the") || lower.starts_with("when the") || lower.starts_with("while the") {
+        "temporal-descriptive".to_string()
+    } else if lower.contains("was ") || lower.contains("were ") || lower.contains("had ") {
+        "past".to_string()
+    } else if lower.contains("is ") || lower.contains("are ") {
+        "present".to_string()
+    } else if lower.starts_with("the ") && lower.contains("ed ") {
+        "past-descriptive".to_string()
+    } else {
+        String::new()
+    }
+}
+
+// Generate varied opening style suggestions based on content type and previous usage
+fn get_varied_opening_styles(_content: &Content, section_type: &SectionType) -> Vec<String> {
+    let mut styles = Vec::new();
+    
+    match section_type {
+        SectionType::Chapter => {
+            styles.extend(vec![
+                "Start with dialogue - let characters speak first to immediately engage readers".to_string(),
+                "Begin with action or movement - someone doing something specific and purposeful".to_string(), 
+                "Open with a concrete sensory detail - what someone sees, hears, feels, or smells".to_string(),
+                "Start mid-scene with tension or conflict already in motion".to_string(),
+                "Begin with an internal thought or realization from a character".to_string(),
+                "Open with a specific object, document, or discovery that drives the plot".to_string(),
+                "Start with weather or environment only if it directly affects the action".to_string(),
+                "Begin with a character making a decision or taking a specific action".to_string(),
+            ]);
+        },
+        SectionType::Scene => {
+            styles.extend(vec![
+                "Start with visual action - what the camera sees first".to_string(),
+                "Begin with dialogue that reveals character or conflict".to_string(),
+                "Open with a close-up on a significant object or detail".to_string(),
+                "Start with movement - characters entering, leaving, or in motion".to_string(),
+                "Begin with sound or lack of sound to set the mood".to_string(),
+            ]);
+        },
+        _ => {
+            styles.extend(vec![
+                "Begin with a specific fact, example, or concrete detail".to_string(),
+                "Start with a question or problem that needs solving".to_string(),
+                "Open with a quote, statement, or declaration".to_string(),
+                "Begin with a comparison or contrast".to_string(),
+                "Start with a direct statement about the main topic".to_string(),
+            ]);
+        }
+    }
+    
+    // Add some universal creative alternatives
+    styles.extend(vec![
+        "Try starting in the middle of a conversation or action".to_string(),
+        "Begin with a character's internal conflict or dilemma".to_string(), 
+        "Open with something unexpected or surprising".to_string(),
+        "Start with a specific moment in time rather than general description".to_string(),
+    ]);
+    
+    styles
+}
+
+// Generate general variety guidance when no specific patterns are detected
+fn generate_general_opening_variety_guidance(section_type: &SectionType) -> String {
+    format!(
+        "🎨 OPENING VARIETY GUIDANCE:\n\
+        - Vary your opening style from previous {}s\n\
+        - Avoid repetitive temporal phrases like 'As the...', 'When the...', 'While the...'\n\
+        - Start with action, dialogue, or specific details rather than general description\n\
+        - Make each opening feel fresh and distinct from previous sections",
+        section_type_name(section_type).to_lowercase()
+    )
 }
