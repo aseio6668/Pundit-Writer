@@ -4671,7 +4671,11 @@ async fn generate_section_summary(client: &AIClient, model: &str, section: &Sect
             _ => "section"
         },
         section.title,
-        &section.content[..section.content.len().min(1000)] // Limit to first 1000 chars for efficiency
+        {
+            let limit = 1000.min(section.content.chars().count());
+            let content_preview: String = section.content.chars().take(limit).collect();
+            content_preview
+        }
     );
     
     match client {
@@ -4831,8 +4835,9 @@ fn get_enhanced_context_for_section(content: &Content, section_number: usize, se
         // For early sections, include more recent content
         context.push_str("Previous content:\n");
         for (idx, section) in content.sections[start_idx..].iter().enumerate() {
-            let truncated = if section.content.len() > 500 {
-                format!("{}...", &section.content[..500])
+            let truncated = if section.content.chars().count() > 500 {
+                let truncated_content: String = section.content.chars().take(500).collect();
+                format!("{}...", truncated_content)
             } else {
                 section.content.clone()
             };
@@ -6197,7 +6202,11 @@ async fn interactive_continuation_mode() -> Result<()> {
         title,
         author,
         chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
-        &existing_content[..existing_content.len().min(500)], // First 500 chars as context
+        {
+            let context_limit = 500.min(existing_content.chars().count());
+            let context_preview: String = existing_content.chars().take(context_limit).collect();
+            context_preview
+        },
         continuation_result
     );
     

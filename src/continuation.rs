@@ -328,9 +328,10 @@ fn review_project_files(project: &ContinuationProject) -> Result<()> {
             match project.get_combined_content() {
                 Ok(content) => {
                     let preview_length = 500; // Show first 500 characters
-                    if content.len() > preview_length {
+                    if content.chars().count() > preview_length {
                         println!("\nContent preview (first {} characters):", preview_length);
-                        println!("{}", &content[..preview_length]);
+                        let truncated: String = content.chars().take(preview_length).collect();
+                        println!("{}", truncated);
                         println!("... [truncated] ...");
                     } else {
                         println!("\nFull content:");
@@ -405,8 +406,9 @@ pub fn continuation_project_to_content(
     content.metadata.current_word_count = project.total_word_count();
     
     // Add existing content as context
-    content.outline = format!("Continuation of existing work.\n\nExisting content summary:\n{}", 
-        &combined_content[..combined_content.len().min(1000)]); // First 1000 chars as outline
+    let summary_length = 1000.min(combined_content.chars().count());
+    let summary: String = combined_content.chars().take(summary_length).collect();
+    content.outline = format!("Continuation of existing work.\n\nExisting content summary:\n{}", summary);
 
     Ok(content)
 }

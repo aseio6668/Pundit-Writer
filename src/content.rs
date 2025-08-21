@@ -903,10 +903,11 @@ pub enum OutputFormat {
 }
 
 pub fn truncate_text(text: &str, max_chars: usize) -> String {
-    if text.len() <= max_chars {
+    if text.chars().count() <= max_chars {
         text.to_string()
     } else {
-        format!("{}...", &text[..max_chars])
+        let truncated: String = text.chars().take(max_chars).collect();
+        format!("{}...", truncated)
     }
 }
 
