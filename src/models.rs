@@ -434,7 +434,8 @@ impl HuggingFaceClient {
             context, section_outline, writing_adjustments.get_style_instructions(), formatting_instructions
         );
         
-        self.generate_text(&prompt, max_tokens, 0.8).await
+        let generated_text = self.generate_text(&prompt, max_tokens, 0.8).await?;
+        Ok(complete_incomplete_sentences(generated_text))
     }
 
     pub async fn generate_structured_outline(&self, content_type: &ContentType, genre: &str, style: &str, premise: &str, num_sections: usize, target_audience: &str) -> Result<StructuredOutline> {
@@ -613,4 +614,90 @@ pub fn create_outline_json_schema(content_type: &ContentType, num_sections: usiz
     }}
   ]
 }}"#, num_sections)
+}
+
+/// Complete incomplete sentences that may be cut off due to token limits
+fn complete_incomplete_sentences(text: String) -> String {
+    let text = text.trim();
+    if text.is_empty() {
+        return text.to_string();
+    }
+    
+    // Check if the text ends with a complete sentence
+    let last_char = text.chars().last().unwrap_or(' ');
+    
+    // If text ends with proper sentence ending punctuation, it's likely complete
+    if matches!(last_char, '.' | '!' | '?' | '"' | '\'' | ')') {
+        return text.to_string();
+    }
+    
+    // For dialogue or special formatting, check if it ends reasonably
+    if text.ends_with(':') || text.ends_with(';') {
+        return text.to_string();
+    }
+    
+    // If text ends mid-sentence, try to find a good stopping point
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return text.to_string();
+    }
+    
+    // Look for the last complete sentence by working backwards
+    let mut complete_text = Vec::new();
+    let mut found_complete_sentence = false;
+    
+    for line in lines.iter().rev() {
+        let line = line.trim();
+        if line.is_empty() {
+            complete_text.push(line);
+            continue;
+        }
+        
+        // Check if this line ends with sentence-ending punctuation
+        let line_last_char = line.chars().last().unwrap_or(' ');
+        if matches!(line_last_char, '.' | '!' | '?' | '"' | '\'') && !found_complete_sentence {
+            complete_text.push(line);
+            found_complete_sentence = true;
+            break;
+        }
+        
+        complete_text.push(line);
+    }
+    
+    // If we found a complete sentence, use text up to that point
+    if found_complete_sentence {
+        complete_text.reverse();
+        let result = complete_text.join("\n").trim().to_string();
+        if !result.is_empty() {
+            return result;
+        }
+    }
+    
+    // If no complete sentence found, try to find a paragraph break
+    let paragraphs: Vec<&str> = text.split("\n\n").collect();
+    if paragraphs.len() > 1 {
+        // Return all complete paragraphs except the last (potentially incomplete) one
+        let complete_paragraphs = &paragraphs[..paragraphs.len() - 1];
+        let result = complete_paragraphs.join("\n\n").trim().to_string();
+        if !result.is_empty() {
+            return result;
+        }
+    }
+    
+    // Last resort: try to end at the last complete word before a reasonable cutoff
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() > 50 { // Only truncate if we have a substantial amount of text
+        // Look for a good place to end within the last portion of the text
+        let cutoff_point = words.len() * 4 / 5; // Use 80% of the text
+        let truncated_words = &words[..cutoff_point];
+        let truncated_text = truncated_words.join(" ");
+        
+        // Make sure we're not cutting off in the middle of dialogue or important punctuation
+        if !truncated_text.contains("\"") || truncated_text.matches("\"").count() % 2 == 0 {
+            return format!("{}.", truncated_text); // Add a period to make it complete
+        }
+    }
+    
+    // If all else fails, return the original text (it might be acceptable as-is)
+    text.to_string()
 }

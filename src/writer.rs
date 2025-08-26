@@ -7,7 +7,7 @@ use crate::content::{Content, Section, SectionType, ContentType, DocumentFormat,
     RuleType, RuleScope, PointOfView, TensionLevel, EventType, EventSignificance, TemporalStructure};
 use crate::config::{Config, save_book_state};
 use crate::poetry_enhancements::{EnhancedPoetryPrompt, create_emotion_from_theme, post_process_poetry};
-use crate::continuation::{interactive_continuation_setup, continuation_project_to_content};
+use crate::continuation::{interactive_continuation_setup, continuation_project_to_content, ContinuationProject};
 use crate::dynamic_length::{DynamicSectionLength, generate_dynamic_section_lengths};
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
@@ -18,6 +18,21 @@ use chrono::Utc;
 use std::fs;
 use std::time::Duration;
 use tokio::time::sleep;
+
+// Custom result type to handle back navigation without exiting the app
+#[derive(Debug)]
+pub struct BackToMenu;
+
+impl std::fmt::Display for BackToMenu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "User selected back to menu")
+    }
+}
+
+impl std::error::Error for BackToMenu {}
+
+// Convenience type alias
+pub type MenuResult<T> = std::result::Result<T, anyhow::Error>;
 
 enum AIClient {
     HuggingFace(HuggingFaceClient),
@@ -1465,24 +1480,24 @@ async fn output_content(content: &Content, output_path: Option<PathBuf>, config:
         ContentType::ChildrensBook => "childrensbook",
     };
     
-    // Save as plain text
+    // Save as plain text with UTF-8 encoding
     let txt_path = output_dir.join(format!("{}_{}_{}.txt", content_type_name, safe_title, timestamp));
-    fs::write(&txt_path, content.to_text())?;
+    std::fs::write(&txt_path, content.to_text().as_bytes())?;
     
-    // Save as markdown
+    // Save as markdown with UTF-8 encoding
     let md_path = output_dir.join(format!("{}_{}_{}.md", content_type_name, safe_title, timestamp));
-    fs::write(&md_path, content.to_markdown())?;
+    std::fs::write(&md_path, content.to_markdown().as_bytes())?;
     
     // Save format-specific version for certain content types
     match content.content_type {
         ContentType::Screenplay => {
             let fdx_path = output_dir.join(format!("screenplay_{}_{}.fdx", safe_title, timestamp));
-            fs::write(&fdx_path, format_as_final_draft(content))?;
+            std::fs::write(&fdx_path, format_as_final_draft(content).as_bytes())?;
             println!("   Final Draft: {}", fdx_path.display());
         },
         ContentType::Play => {
             let play_path = output_dir.join(format!("play_{}_{}.txt", safe_title, timestamp));
-            fs::write(&play_path, format_as_stage_play(content))?;
+            std::fs::write(&play_path, format_as_stage_play(content).as_bytes())?;
             println!("   Stage Format: {}", play_path.display());
         },
         _ => {}
@@ -1561,7 +1576,9 @@ pub async fn interactive_mode() -> Result<()> {
                 "📄 Business Document - Professional or technical document",
                 "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
                 "🎓 Educational Lesson - Language learning, tutorials, instruction",
+                "📖 Educational Textbooks - Academic books for students (K-12 to University)",
                 "👶 Children's Book - Age-appropriate stories and learning",
+                "✨ Freeform Writing - Describe what you want with files/context",
                 "❌ Exit",
             ];
             
@@ -1643,8 +1660,16 @@ pub async fn interactive_mode() -> Result<()> {
                     interactive_educational_lesson_creation().await
                 },
                 16 => {
+                    // Educational textbooks
+                    interactive_educational_textbook_creation().await
+                },
+                17 => {
                     // Children's book creation
                     interactive_childrens_book_creation().await
+                },
+                18 => {
+                    // Freeform writing mode
+                    interactive_freeform_writing().await
                 },
                 _ => {
                     println!("Invalid selection");
@@ -1652,13 +1677,19 @@ pub async fn interactive_mode() -> Result<()> {
                 }
             };
             
-            // Handle the result - if it succeeded, return from the function
+            // Handle the result
             match result {
-                Ok(_) => return Ok(()),
+                Ok(_) => return Ok(()), // User completed task successfully, exit app
                 Err(e) => {
-                    println!("Error: {}", e);
-                    // Continue to content selection to allow retry
-                    continue 'content;
+                    // Check if this is a "back to menu" request
+                    if e.downcast_ref::<BackToMenu>().is_some() {
+                        // User wants to go back to main menu, continue the content loop
+                        continue 'content;
+                    } else {
+                        // Real error occurred
+                        println!("Error: {}", e);
+                        continue 'content;
+                    }
                 }
             }
         }
@@ -1682,7 +1713,7 @@ async fn interactive_screenplay_creation() -> Result<()> {
             .interact()?;
         
         if genre_idx == genres.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let genre = match genre_idx {
@@ -1759,7 +1790,7 @@ async fn interactive_play_creation() -> Result<()> {
             .interact()?;
         
         if genre_idx == genres.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let genre = match genre_idx {
@@ -2652,13 +2683,13 @@ async fn output_book(book: &Book, output_path: Option<PathBuf>, config: &Config)
     let safe_title = sanitize_filename(&book.title);
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     
-    // Save as plain text
+    // Save as plain text with UTF-8 encoding
     let txt_path = output_dir.join(format!("{}_{}.txt", safe_title, timestamp));
-    fs::write(&txt_path, book.to_text())?;
+    std::fs::write(&txt_path, book.to_text().as_bytes())?;
     
-    // Save as markdown
+    // Save as markdown with UTF-8 encoding  
     let md_path = output_dir.join(format!("{}_{}.md", safe_title, timestamp));
-    fs::write(&md_path, book.to_markdown())?;
+    std::fs::write(&md_path, book.to_markdown().as_bytes())?;
     
     println!("\n📁 Book saved to:");
     println!("   Text: {}", txt_path.display());
@@ -2706,7 +2737,7 @@ pub async fn narrate_mode() -> Result<()> {
                 .interact()?;
             
             if genre_idx == genres.len() - 1 {
-                return Ok(()); // Back to main menu
+                return Err(BackToMenu.into()); // Back to main menu
             }
             
             // Handle Educational books separately
@@ -5035,7 +5066,7 @@ async fn interactive_research_doc_creation() -> Result<()> {
             .interact()?;
         
         if doc_type_idx == doc_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let doc_type = match doc_type_idx {
@@ -5189,7 +5220,7 @@ async fn interactive_poetry_creation() -> Result<()> {
         .interact()?;
     
     if style_idx == styles.len() - 1 {
-        return Ok(()); // Back to main menu
+        return Err(BackToMenu.into()); // Back to main menu
     }
     
     let style = match style_idx {
@@ -5330,7 +5361,7 @@ async fn interactive_marketing_creation() -> Result<()> {
             .interact()?;
         
         if type_idx == marketing_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let marketing_type = match type_idx {
@@ -5496,7 +5527,7 @@ async fn interactive_blog_creation() -> Result<()> {
             .interact()?;
         
         if type_idx == content_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let content_type = match type_idx {
@@ -5687,7 +5718,7 @@ async fn interactive_strategic_doc_creation() -> Result<()> {
             .interact()?;
         
         if type_idx == doc_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let doc_type = match type_idx {
@@ -5850,7 +5881,7 @@ async fn interactive_meeting_doc_creation() -> Result<()> {
             .interact()?;
         
         if type_idx == doc_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let doc_type = match type_idx {
@@ -6327,7 +6358,7 @@ async fn interactive_dictionary_creation() -> Result<()> {
             .interact()?;
         
         if dict_type_idx == dict_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let dict_type = match dict_type_idx {
@@ -6429,7 +6460,7 @@ async fn interactive_educational_lesson_creation() -> Result<()> {
             .interact()?;
         
         if edu_type_idx == edu_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let edu_type = match edu_type_idx {
@@ -6542,6 +6573,213 @@ async fn interactive_educational_lesson_creation() -> Result<()> {
     }
 }
 
+// Educational textbook creation for academic institutions
+async fn interactive_educational_textbook_creation() -> Result<()> {
+    loop {
+        println!("\n📖 Creating Educational Textbook");
+        println!("Let me help you create comprehensive academic textbooks for educational institutions...\n");
+        
+        // Education level selection
+        let education_levels = vec![
+            "Elementary School (Grades K-5) - Ages 5-11",
+            "Middle School (Grades 6-8) - Ages 11-14",
+            "High School (Grades 9-12) - Ages 14-18",
+            "Community College - Ages 18+",
+            "University Undergraduate - Ages 18-22",
+            "Graduate/Masters Level - Ages 22+",
+            "Professional/Doctoral Level - Advanced",
+            "Adult Education - Continuing education",
+            "← Back",
+        ];
+        
+        let level_idx = Select::new()
+            .with_prompt("What educational level is this textbook for?")
+            .items(&education_levels)
+            .default(2)
+            .interact()?;
+        
+        if level_idx == education_levels.len() - 1 {
+            return Err(BackToMenu.into()); // Back to main menu
+        }
+        
+        // Subject selection
+        let subjects = vec![
+            "Mathematics - Algebra, geometry, calculus, statistics",
+            "Science - Physics, chemistry, biology, earth science", 
+            "English/Language Arts - Literature, writing, grammar",
+            "Social Studies - History, geography, civics, economics",
+            "Foreign Languages - Spanish, French, German, etc.",
+            "Computer Science - Programming, algorithms, data structures",
+            "Engineering - Mechanical, electrical, civil, software",
+            "Business - Management, marketing, finance, accounting",
+            "Health Sciences - Medicine, nursing, public health",
+            "Arts - Visual arts, music, theater, art history",
+            "Philosophy - Logic, ethics, metaphysics, epistemology",
+            "Psychology - Cognitive, behavioral, developmental",
+            "Other/Custom Subject",
+            "← Back",
+        ];
+        
+        let subject_idx = Select::new()
+            .with_prompt("What subject area is this textbook for?")
+            .items(&subjects)
+            .default(0)
+            .interact()?;
+        
+        if subject_idx == subjects.len() - 1 {
+            continue; // Back to level selection
+        }
+        
+        let subject = if subject_idx == subjects.len() - 2 {
+            // Custom subject
+            Input::new()
+                .with_prompt("Enter the custom subject area")
+                .interact_text()?
+        } else {
+            subjects[subject_idx].split(" - ").next().unwrap().to_string()
+        };
+        
+        // Specific topic/course
+        let topic: String = Input::new()
+            .with_prompt("What specific topic or course is this textbook for? (e.g., 'Algebra II', 'American History', 'Introduction to Psychology')")
+            .interact_text()?;
+        
+        // Textbook scope/length
+        let scopes = vec![
+            "Single Chapter - 1 chapter (10-30 pages)",
+            "Short Course - 3-5 chapters (50-150 pages)",
+            "Semester Course - 8-12 chapters (200-400 pages)",
+            "Full Year Course - 15-20 chapters (400-600 pages)",
+            "Comprehensive Reference - 20+ chapters (600+ pages)",
+            "← Back",
+        ];
+        
+        let scope_idx = Select::new()
+            .with_prompt("What scope should this textbook have?")
+            .items(&scopes)
+            .default(2)
+            .interact()?;
+        
+        if scope_idx == scopes.len() - 1 {
+            continue; // Back to subject selection
+        }
+        
+        // Teaching approach
+        let approaches = vec![
+            "Traditional - Lectures, examples, exercises",
+            "Interactive - Activities, discussions, case studies",
+            "Problem-Based - Real-world problems and solutions",
+            "Inquiry-Based - Questions leading to discovery",
+            "Hands-On - Labs, experiments, practical work",
+            "Mixed Approach - Combination of methods",
+            "← Back",
+        ];
+        
+        let approach_idx = Select::new()
+            .with_prompt("What teaching approach should the textbook use?")
+            .items(&approaches)
+            .default(0)
+            .interact()?;
+        
+        if approach_idx == approaches.len() - 1 {
+            continue; // Back to scope selection
+        }
+        
+        // Learning objectives
+        let objectives: String = Input::new()
+            .with_prompt("What are the main learning objectives? (e.g., 'Students will understand algebraic equations and be able to solve linear problems')")
+            .interact_text()?;
+        
+        // Prerequisites
+        let prerequisites: String = Input::new()
+            .with_prompt("What prerequisites should students have? (e.g., 'Basic arithmetic and introduction to variables')")
+            .default("None".to_string())
+            .interact_text()?;
+        
+        // Model selection
+        let model_options = vec![
+            "Use local Ollama (recommended)",
+            "Use HuggingFace API",
+            "← Back",
+        ];
+        
+        let model_idx = Select::new()
+            .with_prompt("Choose your AI model source:")
+            .items(&model_options)
+            .default(0)
+            .interact()?;
+        
+        if model_idx == model_options.len() - 1 {
+            continue;
+        }
+        
+        let use_local = model_idx == 0;
+        let model = if use_local {
+            "llama2:latest".to_string()
+        } else {
+            "microsoft/DialoGPT-medium".to_string()
+        };
+        
+        // Create comprehensive prompt for educational textbook
+        let education_level = education_levels[level_idx].split(" - ").next().unwrap();
+        let scope_description = scopes[scope_idx].split(" - ").next().unwrap();
+        let approach = approaches[approach_idx].split(" - ").next().unwrap();
+        
+        let enhanced_prompt = format!(
+            "Create a comprehensive educational textbook for {} students studying {}: {}.
+            
+Education Level: {}
+Scope: {}
+Teaching Approach: {}
+Learning Objectives: {}
+Prerequisites: {}
+
+The textbook should include:
+- Clear chapter organization with learning objectives
+- Age-appropriate explanations and examples
+- Practice problems and exercises
+- Key terms and definitions
+- Summary sections for review
+- Assessment questions
+- Real-world applications
+- Visual aids descriptions where appropriate
+
+Structure the content to build knowledge progressively and engage {} students effectively.",
+            education_level, subject, topic, education_level, scope_description, approach, 
+            objectives, prerequisites, education_level.to_lowercase()
+        );
+        
+        println!("\n🎯 Creating {} textbook: '{}'", education_level, topic);
+        println!("📚 Subject: {}", subject);
+        println!("📖 Scope: {}", scope_description);
+        println!("🎓 Approach: {}", approach);
+        println!("🎯 Objectives: {}", objectives);
+        if prerequisites != "None" {
+            println!("📋 Prerequisites: {}", prerequisites);
+        }
+        println!("🤖 Using: {}", if use_local { "Local Ollama" } else { "HuggingFace API" });
+        
+        // Create client and generate content
+        let client = create_ai_client(use_local, model.clone(), None, None)?;
+        
+        // Generate the textbook content
+        let book_content = generate_educational_textbook_content(&client, &enhanced_prompt, &topic).await?;
+        
+        // Save the textbook
+        let filename = format!("textbook_{}_{}.txt", 
+            topic.replace(" ", "_").replace("/", "_").to_lowercase(),
+            chrono::Local::now().format("%Y%m%d_%H%M%S")
+        );
+        
+        std::fs::write(&filename, book_content.as_bytes())?;
+        
+        println!("\n✅ Educational textbook created successfully!");
+        println!("📄 Saved as: {}", filename);
+        
+        return Ok(());
+    }
+}
+
 // Children's book creation with age-appropriate content
 async fn interactive_childrens_book_creation() -> Result<()> {
     loop {
@@ -6570,7 +6808,7 @@ async fn interactive_childrens_book_creation() -> Result<()> {
             .interact()?;
         
         if book_type_idx == book_types.len() - 1 {
-            return Ok(()); // Back to main menu
+            return Err(BackToMenu.into()); // Back to main menu
         }
         
         let book_type = match book_type_idx {
@@ -7379,7 +7617,7 @@ async fn create_educational_book() -> Result<()> {
                 .interact()?;
             
             if type_idx == educational_types.len() - 1 {
-                return Ok(()); // Back to main menu
+                return Err(BackToMenu.into()); // Back to main menu
             }
             
             match type_idx {
@@ -9864,4 +10102,674 @@ fn generate_general_opening_variety_guidance(section_type: &SectionType) -> Stri
         - Make each opening feel fresh and distinct from previous sections",
         section_type_name(section_type).to_lowercase()
     )
+}
+
+// Freeform Writing Mode - New feature requested
+async fn interactive_freeform_writing() -> Result<()> {
+    println!("{}", console::style("✨ Freeform Writing Mode").bold().magenta());
+    println!("═══════════════════════════════════════");
+    println!();
+    println!("Describe what you want to create in your own words.");
+    println!("You can include files for context, reference, or continuation.");
+    println!("The AI will analyze your description and create content in the most appropriate format.");
+    println!();
+
+    // File management phase - using the existing ContinuationProject system
+    let mut project = crate::continuation::ContinuationProject::new();
+    let mut has_files = false;
+
+    loop {
+        // Show current files if any
+        if !project.files.is_empty() {
+            println!("\n📂 Current reference files:");
+            for (i, file) in project.files.iter().enumerate() {
+                let status = if file.exists { "✅" } else { "❌" };
+                println!("  {}. {} {}", i + 1, status, file.display_info());
+            }
+            println!("Total words: {}\n", project.total_word_count());
+            has_files = true;
+        }
+
+        // File management menu
+        let mut options = vec![
+            "📁 Add reference file",
+        ];
+
+        if has_files {
+            options.push("📝 Review files");
+            options.push("🗑️ Remove a file");
+        }
+        
+        options.push("✅ Continue to writing prompt");
+        options.push("← Back to main menu");
+
+        let choice = Select::new()
+            .with_prompt("File Management")
+            .items(&options)
+            .default(if has_files { 3 } else { 1 })
+            .interact()?;
+
+        match choice {
+            0 => {
+                // Add file
+                if let Err(e) = add_file_to_freeform_project(&mut project).await {
+                    println!("❌ Error adding file: {}", e);
+                }
+            },
+            i if has_files && options[i] == "📝 Review files" => {
+                review_freeform_files(&project)?;
+            },
+            i if has_files && options[i] == "🗑️ Remove a file" => {
+                if let Err(e) = remove_file_from_freeform_project(&mut project) {
+                    println!("❌ Error removing file: {}", e);
+                }
+            },
+            i if options[i] == "✅ Continue to writing prompt" => {
+                break;
+            },
+            _ => {
+                // Back to main menu
+                return Ok(());
+            }
+        }
+    }
+
+    // Freeform prompt phase
+    println!("\n📝 Describe what you want to create:");
+    println!("Be as specific or general as you like. Examples:");
+    println!("• 'A business report analyzing our Q3 sales data from the spreadsheet'");
+    println!("• 'Continue the story from my novel draft as a screenplay'"); 
+    println!("• 'A technical manual for the API docs I uploaded'");
+    println!("• 'Transform these meeting notes into action items'");
+    println!();
+
+    let freeform_prompt: String = Input::new()
+        .with_prompt("Your writing request")
+        .interact_text()?;
+
+    if freeform_prompt.trim().is_empty() {
+        println!("❌ Empty prompt. Returning to main menu.");
+        return Ok(());
+    }
+
+    // Analyze the prompt and determine the best format
+    let analysis = analyze_freeform_prompt(&freeform_prompt, &project.files);
+    
+    println!("\n🎯 Analysis Results:");
+    println!("   Detected format: {}", analysis.detected_format);
+    println!("   Confidence: {}%", (analysis.confidence * 100.0) as u8);
+    println!("   Content type: {:?}", analysis.content_type);
+    if !analysis.key_requirements.is_empty() {
+        println!("   Key requirements: {}", analysis.key_requirements.join(", "));
+    }
+    println!();
+
+    let proceed = Confirm::new()
+        .with_prompt(&format!("Proceed with creating {} content?", analysis.detected_format))
+        .default(true)
+        .interact()?;
+
+    if !proceed {
+        println!("📝 You can refine your prompt or go back to file management.");
+        return Ok(());
+    }
+
+    // Get title and author for the content
+    let title: String = Input::new()
+        .with_prompt("Content title")
+        .default(format!("{} Content", analysis.detected_format))
+        .interact_text()?;
+    
+    let author: String = Input::new()
+        .with_prompt("Author name")
+        .default("Pundit Writer".to_string())
+        .interact_text()?;
+
+    // Create a minimal config for the generation
+    let temp_config = Config::default();
+
+    // Generate the content
+    generate_freeform_content(&project, &freeform_prompt, &analysis, &title, &author, &temp_config).await?;
+
+    Ok(())
+}
+
+#[derive(Debug)]
+struct FreeformAnalysis {
+    detected_format: String,
+    content_type: ContentType,
+    confidence: f32,
+    key_requirements: Vec<String>,
+    estimated_length: usize,
+    target_sections: usize,
+}
+
+async fn add_file_to_freeform_project(project: &mut ContinuationProject) -> anyhow::Result<()> {
+    loop {
+        let file_path: String = Input::new()
+            .with_prompt("Enter file path (or 'back' to return)")
+            .interact_text()?;
+
+        if file_path.trim().to_lowercase() == "back" {
+            return Ok(());
+        }
+
+        let path = PathBuf::from(file_path.trim());
+
+        match project.add_file(path.clone()) {
+            Ok(_) => {
+                let file = project.files.last().unwrap();
+                if file.exists {
+                    println!("✅ Added: {} ({} words)", path.display(), file.word_count);
+                } else {
+                    println!("⚠️ Added: {} (file not found - will be created)", path.display());
+                }
+
+                // Ask if they want to add more files
+                let add_more = Confirm::new()
+                    .with_prompt("Add another file?")
+                    .default(false)
+                    .interact()?;
+
+                if !add_more {
+                    break;
+                }
+            },
+            Err(e) => {
+                println!("❌ Error: {}", e);
+                continue;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn review_freeform_files(project: &ContinuationProject) -> anyhow::Result<()> {
+    if project.files.is_empty() {
+        println!("No files in the project.");
+        return Ok(());
+    }
+
+    println!("\n📋 Freeform Project Review");
+    println!("==========================");
+
+    if let Some(primary) = &project.primary_file {
+        println!("Primary file: {}", primary.display());
+    }
+
+    if let Some(ref project_type) = project.project_type {
+        println!("Detected type: {:?}", project_type);
+    }
+
+    println!("Total files: {}", project.files.len());
+    println!("Total words: {}", project.total_word_count());
+
+    println!("\nFiles:");
+    for (i, file) in project.files.iter().enumerate() {
+        let status = if file.exists { "✅ Exists" } else { "❌ Not found" };
+        println!("  {}. {} - {}", i + 1, file.display_info(), status);
+    }
+
+    // Ask if they want to preview content
+    if project.files.iter().any(|f| f.exists) {
+        let preview = Confirm::new()
+            .with_prompt("Would you like to preview the combined content?")
+            .default(false)
+            .interact()?;
+
+        if preview {
+            match project.get_combined_content() {
+                Ok(content) => {
+                    let preview_length = 500; // Show first 500 characters
+                    if content.chars().count() > preview_length {
+                        println!("\nContent preview (first {} characters):", preview_length);
+                        let truncated: String = content.chars().take(preview_length).collect();
+                        println!("{}", truncated);
+                        println!("... [truncated] ...");
+                    } else {
+                        println!("\nFull content:");
+                        println!("{}", content);
+                    }
+                },
+                Err(e) => {
+                    println!("❌ Error reading content: {}", e);
+                }
+            }
+        }
+    }
+
+    println!("\nPress Enter to continue...");
+    let _: String = Input::new().with_prompt("").allow_empty(true).interact_text()?;
+
+    Ok(())
+}
+
+fn remove_file_from_freeform_project(project: &mut ContinuationProject) -> anyhow::Result<()> {
+    if project.files.is_empty() {
+        return Err(anyhow::anyhow!("No files to remove"));
+    }
+
+    let file_options: Vec<String> = project.files
+        .iter()
+        .enumerate()
+        .map(|(i, f)| format!("{}. {}", i + 1, f.display_info()))
+        .collect();
+
+    let mut options = file_options;
+    options.push("← Cancel".to_string());
+
+    let choice = Select::new()
+        .with_prompt("Which file would you like to remove?")
+        .items(&options)
+        .default(0)
+        .interact()?;
+
+    if choice == options.len() - 1 {
+        return Ok(()); // Cancel
+    }
+
+    project.remove_file(choice)?;
+    println!("✅ File removed from project");
+
+    Ok(())
+}
+
+fn analyze_freeform_prompt(prompt: &str, files: &[crate::continuation::ContinuationFile]) -> FreeformAnalysis {
+    let prompt_lower = prompt.to_lowercase();
+    let mut confidence = 0.0;
+    let mut detected_format = String::new();
+    let mut content_type = ContentType::Document;
+    let mut key_requirements = Vec::new();
+    let mut estimated_length = 1000;
+    let mut target_sections = 3;
+
+    // Analyze for different content types with confidence scoring
+    let mut format_scores = std::collections::HashMap::new();
+
+    // Business/Professional formats
+    if prompt_lower.contains("business report") || prompt_lower.contains("executive summary") || 
+       prompt_lower.contains("quarterly report") || prompt_lower.contains("financial analysis") {
+        format_scores.insert("Business Report", 0.9);
+        content_type = ContentType::TechnicalDoc;
+        estimated_length = 2000;
+        target_sections = 5;
+        key_requirements.push("Executive Summary".to_string());
+        key_requirements.push("Data Analysis".to_string());
+        key_requirements.push("Recommendations".to_string());
+    }
+
+    // Creative writing formats
+    if prompt_lower.contains("novel") || prompt_lower.contains("story") || prompt_lower.contains("chapter") {
+        format_scores.insert("Novel/Story", 0.85);
+        content_type = ContentType::Book;
+        estimated_length = 5000;
+        target_sections = 8;
+        key_requirements.push("Character Development".to_string());
+        key_requirements.push("Plot Progression".to_string());
+        key_requirements.push("Narrative Flow".to_string());
+    }
+
+    // Screenplay/Script formats
+    if prompt_lower.contains("script") || prompt_lower.contains("screenplay") || 
+       prompt_lower.contains("tv script") || prompt_lower.contains("movie") {
+        format_scores.insert("Screenplay", 0.9);
+        content_type = ContentType::Screenplay;
+        estimated_length = 3000;
+        target_sections = 6;
+        key_requirements.push("Scene Structure".to_string());
+        key_requirements.push("Character Dialogue".to_string());
+        key_requirements.push("Visual Direction".to_string());
+    }
+
+    // Technical documentation
+    if prompt_lower.contains("documentation") || prompt_lower.contains("manual") || 
+       prompt_lower.contains("guide") || prompt_lower.contains("tutorial") {
+        format_scores.insert("Technical Documentation", 0.8);
+        content_type = ContentType::TechnicalDoc;
+        estimated_length = 2500;
+        target_sections = 6;
+        key_requirements.push("Step-by-step Instructions".to_string());
+        key_requirements.push("Examples".to_string());
+        key_requirements.push("Troubleshooting".to_string());
+    }
+
+    // Marketing/Advertising
+    if prompt_lower.contains("marketing") || prompt_lower.contains("advertisement") || 
+       prompt_lower.contains("campaign") || prompt_lower.contains("promotional") {
+        format_scores.insert("Marketing Content", 0.85);
+        content_type = ContentType::MarketingAd;
+        estimated_length = 1500;
+        target_sections = 4;
+        key_requirements.push("Target Audience".to_string());
+        key_requirements.push("Call to Action".to_string());
+        key_requirements.push("Value Proposition".to_string());
+    }
+
+    // Academic/Research
+    if prompt_lower.contains("research") || prompt_lower.contains("academic") || 
+       prompt_lower.contains("analysis") || prompt_lower.contains("study") {
+        format_scores.insert("Research Report", 0.8);
+        content_type = ContentType::ResearchReport;
+        estimated_length = 3500;
+        target_sections = 7;
+        key_requirements.push("Literature Review".to_string());
+        key_requirements.push("Methodology".to_string());
+        key_requirements.push("Findings".to_string());
+        key_requirements.push("Conclusions".to_string());
+    }
+
+    // Blog/Article
+    if prompt_lower.contains("blog") || prompt_lower.contains("article") || 
+       prompt_lower.contains("editorial") || prompt_lower.contains("opinion") {
+        format_scores.insert("Blog/Article", 0.75);
+        content_type = ContentType::BlogPost;
+        estimated_length = 1200;
+        target_sections = 4;
+        key_requirements.push("Engaging Introduction".to_string());
+        key_requirements.push("Supporting Evidence".to_string());
+        key_requirements.push("Clear Conclusion".to_string());
+    }
+
+    // Find the highest confidence format
+    if let Some((format, score)) = format_scores.iter().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()) {
+        detected_format = format.to_string();
+        confidence = *score;
+    } else {
+        // Default fallback based on general indicators
+        detected_format = "General Document".to_string();
+        confidence = 0.5;
+        key_requirements.push("Clear Structure".to_string());
+        key_requirements.push("Coherent Content".to_string());
+    }
+
+    // Adjust estimates based on file content if available
+    let total_input_words: usize = files.iter().map(|f| f.word_count).sum();
+    if total_input_words > 0 {
+        estimated_length = std::cmp::max(estimated_length, total_input_words / 2);
+    }
+
+    FreeformAnalysis {
+        detected_format,
+        content_type,
+        confidence,
+        key_requirements,
+        estimated_length,
+        target_sections,
+    }
+}
+
+async fn generate_freeform_content(
+    project: &ContinuationProject,
+    prompt: &str,
+    analysis: &FreeformAnalysis,
+    title: &str,
+    author: &str,
+    config: &Config,
+) -> anyhow::Result<()> {
+    println!("\n🎯 Generating {} content...", analysis.detected_format);
+    println!("Confidence: {:.0}%", analysis.confidence * 100.0);
+    println!("Target length: ~{} words", analysis.estimated_length);
+    println!("Sections: {}", analysis.target_sections);
+    
+    if !analysis.key_requirements.is_empty() {
+        println!("Key elements to include:");
+        for req in &analysis.key_requirements {
+            println!("  • {}", req);
+        }
+    }
+
+    // Get combined content from files
+    let file_context = match project.get_combined_content() {
+        Ok(content) => content,
+        Err(_) => String::new(), // No files or unreadable files
+    };
+
+    // Create enhanced prompt that combines user request with file context
+    let enhanced_prompt = if file_context.is_empty() {
+        format!(
+            "Create a {} with the following specifications:\n\n{}\n\nFormat: {}\nTarget length: {} words\nSections: {}\n\nEnsure the content follows proper {} formatting and structure.",
+            analysis.detected_format.to_lowercase(),
+            prompt,
+            analysis.detected_format,
+            analysis.estimated_length,
+            analysis.target_sections,
+            analysis.detected_format
+        )
+    } else {
+        format!(
+            "Using the provided file content as reference/context, create a {} with the following specifications:\n\n{}\n\nReference Content:\n{}\n\nFormat: {}\nTarget length: {} words\nSections: {}\n\nEnsure the content follows proper {} formatting and structure while incorporating insights from the reference materials.",
+            analysis.detected_format.to_lowercase(),
+            prompt,
+            file_context,
+            analysis.detected_format,
+            analysis.estimated_length,
+            analysis.target_sections,
+            analysis.detected_format
+        )
+    };
+
+    // Create content object for generation
+    let mut content = crate::content::Content::new_document(
+        title.to_string(),
+        author.to_string(),
+        "Freeform Generated Content".to_string(),
+        enhanced_prompt.clone(),
+        analysis.estimated_length,
+        crate::content::DocumentFormat::Educational,
+        "freeform".to_string(),
+    );
+
+    content.content_type = analysis.content_type.clone();
+    content.metadata.target_word_count = Some(analysis.estimated_length);
+
+    // Generate the content using the appropriate method based on content type
+    let result = generate_freeform_content_internal(&mut content, &enhanced_prompt, config).await;
+
+    match result {
+        Ok(_) => {
+            println!("✅ Freeform content generated successfully!");
+            
+            // Save the generated content
+            let filename = format!("freeform_{}_{}.txt", 
+                title.replace(" ", "_").to_lowercase(),
+                chrono::Local::now().format("%Y%m%d_%H%M%S")
+            );
+            
+            let output_path = std::path::Path::new(&filename);
+            let content_text = content.to_text();
+            std::fs::write(output_path, content_text.as_bytes())?;
+            
+            println!("📄 Content saved to: {}", output_path.display());
+        },
+        Err(e) => {
+            println!("❌ Error generating content: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
+async fn generate_freeform_content_internal(
+    content: &mut Content,
+    prompt: &str,
+    _config: &Config,
+) -> anyhow::Result<()> {
+    let target_sections = content.metadata.target_sections;
+    let target_words = content.metadata.target_word_count.unwrap_or(1000);
+    
+    // Create a simple client using the default pattern from existing code
+    let use_local = std::env::var("USE_LOCAL_OLLAMA").is_ok();
+    let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+    
+    let client = if use_local {
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        // Try to get API key from environment or config
+        let api_key = std::env::var("HUGGINGFACE_API_KEY").ok();
+        let model = "microsoft/DialoGPT-medium".to_string(); // Default model
+        let hf_client = HuggingFaceClient::new(model, api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    // Generate content sections progressively
+    for section_num in 0..target_sections {
+        let section_prompt = if section_num == 0 {
+            format!("{}\n\nThis is section {} of {}. Start with a compelling opening.", 
+                prompt, section_num + 1, target_sections)
+        } else if section_num == target_sections - 1 {
+            format!("{}\n\nThis is the final section {} of {}. Provide a satisfying conclusion.\n\nPrevious content:\n{}", 
+                prompt, section_num + 1, target_sections, content.get_context_for_next_section())
+        } else {
+            format!("{}\n\nThis is section {} of {}. Continue the narrative/content progression.\n\nPrevious content:\n{}", 
+                prompt, section_num + 1, target_sections, content.get_context_for_next_section())
+        };
+
+        let section_target_words = target_words / target_sections;
+        let max_tokens = section_target_words * 6; // Conservative estimate
+
+        // Generate section content
+        let generated_text = match &client {
+            AIClient::HuggingFace(hf_client) => {
+                hf_client.generate_text(&section_prompt, max_tokens as u32, 0.8).await?
+            },
+            AIClient::Ollama(ollama_client) => {
+                let default_model = "llama2"; // Default model for Ollama
+                ollama_client.generate_text(default_model, &section_prompt, max_tokens as i32, 0.8).await?
+            }
+        };
+
+        // Create section with correct structure
+        let section = Section {
+            number: section_num + 1,
+            title: format!("Section {}", section_num + 1),
+            content: generated_text.trim().to_string(),
+            word_count: count_words(&generated_text),
+            outline: format!("Generated section {} content", section_num + 1),
+            section_type: SectionType::Section, // Use the generic Section type
+            created_at: Utc::now(),
+            completed: true,
+            plot_thread: None,
+            narrative_context: None,
+        };
+
+        content.add_section(section);
+        content.metadata.current_word_count += count_words(&generated_text);
+
+        println!("✅ Generated section {}/{} ({} words)", section_num + 1, target_sections, count_words(&generated_text));
+    }
+
+    Ok(())
+}
+
+// Helper function to create AI client
+fn create_ai_client(use_local: bool, model: String, api_key: Option<String>, endpoint: Option<String>) -> Result<AIClient> {
+    if use_local {
+        let ollama_url = endpoint.unwrap_or_else(|| "http://localhost:11434".to_string());
+        let ollama_client = OllamaClient::new(ollama_url)?;
+        Ok(AIClient::Ollama(ollama_client))
+    } else {
+        let hf_client = HuggingFaceClient::new(model, api_key)?;
+        Ok(AIClient::HuggingFace(hf_client))
+    }
+}
+
+// Generate comprehensive educational textbook content
+async fn generate_educational_textbook_content(client: &AIClient, prompt: &str, topic: &str) -> Result<String> {
+    println!("\n📚 Generating textbook content...");
+    
+    // Estimate sections based on scope (this could be made more sophisticated)
+    let estimated_sections = if prompt.contains("Single Chapter") {
+        1
+    } else if prompt.contains("Short Course") {
+        4
+    } else if prompt.contains("Semester Course") {
+        10
+    } else if prompt.contains("Full Year Course") {
+        16
+    } else {
+        20 // Comprehensive Reference
+    };
+    
+    let mut full_content = String::new();
+    
+    // Generate table of contents first
+    let toc_prompt = format!("{}\n\nFirst, create a detailed table of contents with {} main sections. Each section should have clear learning objectives and subsections.", prompt, estimated_sections);
+    
+    let toc = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&toc_prompt, 2000, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text("llama2", &toc_prompt, 2000, 0.7).await?
+        }
+    };
+    
+    full_content.push_str(&format!("# {}\n\n", topic));
+    full_content.push_str("## Table of Contents\n\n");
+    full_content.push_str(&toc);
+    full_content.push_str("\n\n---\n\n");
+    
+    // Generate each section
+    for section_num in 1..=estimated_sections {
+        println!("📖 Generating section {}/{}...", section_num, estimated_sections);
+        
+        let section_prompt = format!(
+            "{}\n\nNow create Section {} of the textbook. Make it comprehensive with:\n\
+            - Clear introduction to the section topic\n\
+            - Detailed explanations with examples\n\
+            - Practice problems or exercises\n\
+            - Key terms and definitions\n\
+            - Section summary\n\
+            - Connection to previous and next sections\n\n\
+            Previous content for context:\n{}",
+            prompt, section_num, 
+            if full_content.len() > 1000 {
+                // Use last 1000 characters for context
+                full_content.chars().skip(full_content.chars().count().saturating_sub(1000)).collect::<String>()
+            } else {
+                full_content.clone()
+            }
+        );
+        
+        let section_content = match client {
+            AIClient::HuggingFace(hf_client) => {
+                hf_client.generate_text(&section_prompt, 3000, 0.8).await?
+            },
+            AIClient::Ollama(ollama_client) => {
+                ollama_client.generate_text("llama2", &section_prompt, 3000, 0.8).await?
+            }
+        };
+        
+        full_content.push_str(&format!("## Section {}\n\n", section_num));
+        full_content.push_str(&section_content);
+        full_content.push_str("\n\n---\n\n");
+        
+        // Small delay to prevent overwhelming the API
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    
+    // Add conclusion/appendix
+    let conclusion_prompt = format!("{}\n\nFinally, create a conclusion section that:\n\
+        - Summarizes key learning outcomes\n\
+        - Provides additional resources for further study\n\
+        - Includes a glossary of important terms\n\
+        - Suggests next steps for continued learning", prompt);
+    
+    let conclusion = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&conclusion_prompt, 2000, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text("llama2", &conclusion_prompt, 2000, 0.7).await?
+        }
+    };
+    
+    full_content.push_str("## Conclusion and Resources\n\n");
+    full_content.push_str(&conclusion);
+    
+    println!("✅ Textbook generation complete! ({} words)", count_words(&full_content));
+    
+    Ok(full_content)
 }

@@ -126,7 +126,7 @@ pub fn save_book_state(content: &crate::content::Content) -> Result<()> {
     let content_json = serde_json::to_string_pretty(content)
         .map_err(|e| anyhow!("Failed to serialize content: {}", e))?;
     
-    fs::write(&content_file, content_json)
+    std::fs::write(&content_file, content_json.as_bytes())
         .map_err(|e| anyhow!("Failed to save content state: {}", e))?;
     
     Ok(())
