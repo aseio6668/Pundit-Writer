@@ -979,23 +979,51 @@ async fn write_next_section(
         )
     };
     
-    // Generate section content with enhanced instructions
-    let mut content_text = if target_words > 3000 { // Use segmented generation for large sections
-        generate_segmented_content(client, model, content, section_number, &enhanced_outline, target_words, &section_type).await?
-    } else {
-        match client {
-            AIClient::HuggingFace(hf_client) => {
-                hf_client.generate_content_section(&content.content_type, &content.genre, &context, &enhanced_outline, target_words).await?
-            },
-            AIClient::Ollama(ollama_client) => {
-                ollama_client.generate_content_section(model, &content.content_type, &content.genre, &context, &enhanced_outline, target_words).await?
-            }
+    // Generate section content with enhanced instructions and robust error handling
+    let mut content_text = {
+        // Create a clean, isolated prompt to prevent contamination
+        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words);
+        
+        // Validate prompt isn't corrupted before sending to AI
+        if is_prompt_corrupted(&clean_prompt) {
+            return Err(anyhow!("Generated prompt contains corrupted data - aborting to prevent AI contamination"));
         }
+        
+        let raw_result = if target_words > 3000 { // Use segmented generation for large sections
+            generate_segmented_content(client, model, content, section_number, &enhanced_outline, target_words, &section_type).await?
+        } else {
+            // Use safer direct text generation to avoid complex processing chain
+            match client {
+                AIClient::HuggingFace(hf_client) => {
+                    hf_client.generate_text(&clean_prompt, (target_words as f32 * 1.3) as u32, 0.8).await?
+                },
+                AIClient::Ollama(ollama_client) => {
+                    ollama_client.generate_text(model, &clean_prompt, (target_words as f32 * 1.3) as i32, 0.8).await?
+                }
+            }
+        };
+        
+        // Validate the AI output before processing
+        if is_ai_output_corrupted(&raw_result) {
+            return Err(anyhow!("AI generated corrupted or contaminated output - content rejected: {}", 
+                truncate_for_error(&raw_result, 100)));
+        }
+        
+        raw_result
     };
     
     // Clean the generated content to remove any chapter number references and AI meta-commentary
     content_text = clean_generated_content(&content_text, section_number, &section_type);
     content_text = filter_ai_meta_commentary(&content_text);
+    
+    // Final validation after cleaning
+    if content_text.trim().is_empty() {
+        return Err(anyhow!("Content generation resulted in empty text after cleaning"));
+    }
+    
+    if is_ai_output_corrupted(&content_text) {
+        return Err(anyhow!("Content still corrupted after cleaning - regeneration required"));
+    }
     
     // Validate content isn't a duplicate
     if is_duplicate_content(&content_text, &content.sections) {
@@ -1560,24 +1588,35 @@ pub async fn interactive_mode() -> Result<()> {
         'content: loop {
             // Content type selection
             let content_types = vec![
+                // === CREATIVE WRITING ===
                 "📚 Book - Traditional long-form narrative",
+                "👶 Children's Book - Age-appropriate stories and learning",
+                "🎨 Poetry - Sonnets, haiku, free verse, and more",
+                
+                // === SCREENWRITING & SCRIPTS ===
                 "🎬 Screenplay - Movie script with professional formatting",
                 "🎭 Stage Play - Theater script with stage directions",
-                "🔬 Technical Documentation - Manuals, APIs, guides",
-                "📊 Research & White Papers - Reports, case studies, analysis",
-                "🎨 Poetry - Sonnets, haiku, free verse, and more",
-                "📝 Marketing Content - Ads, press releases, media kits",
-                "📰 Blog & SEO Articles - Posts, tutorials, reviews",
-                "📋 Strategic Planning - Business plans, roadmaps, vision docs",
-                "📅 Meeting Documentation - Notes, summaries, action items",
                 "📺 TV Script - Television episode or series",
                 "🎧 Audio Script - Podcast, radio play, or audio drama",
                 "🎮 Game Script - Interactive dialogue with branching choices",
-                "📄 Business Document - Professional or technical document",
-                "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
+                
+                // === EDUCATIONAL & REFERENCE ===
                 "🎓 Educational Lesson - Language learning, tutorials, instruction",
                 "📖 Educational Textbooks - Academic books for students (K-12 to University)",
-                "👶 Children's Book - Age-appropriate stories and learning",
+                "📖 Dictionary/Lexicon - Word definitions, etymologies, terminology",
+                
+                // === BUSINESS & PROFESSIONAL ===
+                "📋 Strategic Planning - Business plans, roadmaps, vision docs",
+                "📄 Business Document - Professional or technical document",
+                "📅 Meeting Documentation - Notes, summaries, action items",
+                "📝 Marketing Content - Ads, press releases, media kits",
+                
+                // === RESEARCH & TECHNICAL ===
+                "📊 Research & White Papers - Reports, case studies, analysis",
+                "🔬 Technical Documentation - Manuals, APIs, guides",
+                "📰 Blog & SEO Articles - Posts, tutorials, reviews",
+                
+                // === SPECIAL MODES ===
                 "✨ Freeform Writing - Describe what you want with files/context",
                 "❌ Exit",
             ];
@@ -1595,78 +1634,89 @@ pub async fn interactive_mode() -> Result<()> {
             }
             
             let result = match content_idx {
+                // === CREATIVE WRITING ===
                 0 => {
                     // Books - offer new/continue options
                     interactive_book_mode().await
                 },
                 1 => {
-                    // Screenplay creation
-                    interactive_screenplay_creation().await
-                },
-                2 => {
-                    // Stage play creation
-                    interactive_play_creation().await
-                },
-                3 => {
-                    // Technical documentation
-                    interactive_technical_doc_creation().await
-                },
-                4 => {
-                    // Research & white papers
-                    interactive_research_doc_creation().await
-                },
-                5 => {
-                    // Poetry creation
-                    interactive_poetry_creation().await
-                },
-                6 => {
-                    // Marketing content
-                    interactive_marketing_creation().await
-                },
-                7 => {
-                    // Blog & SEO articles
-                    interactive_blog_creation().await
-                },
-                8 => {
-                    // Strategic planning
-                    interactive_strategic_doc_creation().await
-                },
-                9 => {
-                    // Meeting documentation
-                    interactive_meeting_doc_creation().await
-                },
-                10 => {
-                    // TV script creation
-                    interactive_tv_creation().await
-                },
-                11 => {
-                    // Audio script creation
-                    interactive_audio_creation().await
-                },
-                12 => {
-                    // Game script creation
-                    interactive_game_creation().await
-                },
-                13 => {
-                    // Document creation
-                    interactive_document_creation().await
-                },
-                14 => {
-                    // Dictionary creation
-                    interactive_dictionary_creation().await
-                },
-                15 => {
-                    // Educational lesson creation
-                    interactive_educational_lesson_creation().await
-                },
-                16 => {
-                    // Educational textbooks
-                    interactive_educational_textbook_creation().await
-                },
-                17 => {
                     // Children's book creation
                     interactive_childrens_book_creation().await
                 },
+                2 => {
+                    // Poetry creation
+                    interactive_poetry_creation().await
+                },
+                
+                // === SCREENWRITING & SCRIPTS ===
+                3 => {
+                    // Screenplay creation
+                    interactive_screenplay_creation().await
+                },
+                4 => {
+                    // Stage play creation
+                    interactive_play_creation().await
+                },
+                5 => {
+                    // TV script creation
+                    interactive_tv_creation().await
+                },
+                6 => {
+                    // Audio script creation
+                    interactive_audio_creation().await
+                },
+                7 => {
+                    // Game script creation
+                    interactive_game_creation().await
+                },
+                
+                // === EDUCATIONAL & REFERENCE ===
+                8 => {
+                    // Educational lesson creation
+                    interactive_educational_lesson_creation().await
+                },
+                9 => {
+                    // Educational textbooks
+                    interactive_educational_textbook_creation().await
+                },
+                10 => {
+                    // Dictionary creation
+                    interactive_dictionary_creation().await
+                },
+                
+                // === BUSINESS & PROFESSIONAL ===
+                11 => {
+                    // Strategic planning
+                    interactive_strategic_doc_creation().await
+                },
+                12 => {
+                    // Document creation
+                    interactive_document_creation().await
+                },
+                13 => {
+                    // Meeting documentation
+                    interactive_meeting_doc_creation().await
+                },
+                14 => {
+                    // Marketing content
+                    interactive_marketing_creation().await
+                },
+                
+                // === RESEARCH & TECHNICAL ===
+                15 => {
+                    // Research & white papers
+                    interactive_research_doc_creation().await
+                },
+                16 => {
+                    // Technical documentation
+                    interactive_technical_doc_creation().await
+                },
+                17 => {
+                    // Blog & SEO articles
+                    interactive_blog_creation().await
+                },
+                
+                // === SPECIAL MODES ===
                 18 => {
                     // Freeform writing mode
                     interactive_freeform_writing().await
@@ -10772,4 +10822,162 @@ async fn generate_educational_textbook_content(client: &AIClient, prompt: &str, 
     println!("✅ Textbook generation complete! ({} words)", count_words(&full_content));
     
     Ok(full_content)
+}
+
+// Helper functions for AI output validation and corruption prevention
+fn create_isolated_generation_prompt(content_type: &ContentType, genre: &str, context: &str, outline: &str, target_words: usize) -> String {
+    // Create a clean, isolated prompt with clear structure
+    format!(
+        "===== CREATIVE WRITING TASK =====
+Content Type: {:?}
+Genre: {}
+Target Length: {} words
+
+Context:
+{}
+
+Writing Instructions:
+{}
+
+===== IMPORTANT RULES =====
+1. Write ONLY the story content requested
+2. Do NOT include chapter numbers, titles, or headers in your output
+3. Do NOT include any meta-commentary or explanations
+4. Do NOT reference this prompt or previous instructions
+5. Write in narrative prose only
+6. Maintain consistency with the provided context
+
+===== BEGIN WRITING =====",
+        content_type, genre, target_words, 
+        sanitize_context_for_ai(context),
+        sanitize_outline_for_ai(outline)
+    )
+}
+
+fn sanitize_context_for_ai(context: &str) -> String {
+    context
+        .lines()
+        .filter(|line| {
+            let line_lower = line.to_lowercase();
+            // Filter out lines that might confuse the AI
+            !line_lower.contains("context:") &&
+            !line_lower.contains("question:") &&
+            !line_lower.contains("answer:") &&
+            !line_lower.contains("user:") &&
+            !line_lower.contains("assistant:") &&
+            !line_lower.contains("ai:") &&
+            !line_lower.contains("http") &&
+            !line_lower.contains("www.") &&
+            !line_lower.contains("<!--") &&
+            !line_lower.contains("-->") &&
+            !line.trim().starts_with("#") &&
+            !line.trim().starts_with("*")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+fn sanitize_outline_for_ai(outline: &str) -> String {
+    outline
+        .lines()
+        .map(|line| {
+            // Remove any formatting that might confuse the AI
+            line.replace("*", "")
+                .replace("#", "")
+                .replace("**", "")
+                .replace("__", "")
+                .trim()
+                .to_string()
+        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_prompt_corrupted(prompt: &str) -> bool {
+    let prompt_lower = prompt.to_lowercase();
+    
+    // Check for signs of prompt corruption or contamination
+    prompt_lower.contains("context:") && prompt_lower.contains("question:") ||
+    prompt_lower.contains("user:") && prompt_lower.contains("assistant:") ||
+    prompt_lower.contains("training data") ||
+    prompt_lower.contains("example output") ||
+    prompt_lower.contains("dataset") ||
+    prompt_lower.contains("model training") ||
+    prompt.len() > 50000 || // Unreasonably long prompt
+    prompt.matches("Context").count() > 10 || // Too many "Context" keywords
+    prompt.contains("$") && prompt.contains("http") // Suspicious URL patterns
+}
+
+fn is_ai_output_corrupted(output: &str) -> bool {
+    let output_lower = output.to_lowercase();
+    
+    // Check for signs of corrupted AI output
+    if output.len() < 10 {
+        return true; // Too short to be valid content
+    }
+    
+    // Check for training data contamination patterns
+    let contamination_patterns = [
+        "context:",
+        "question:",
+        "answer:",
+        "user:",
+        "assistant:",
+        "questionnaire",
+        "questioneering",
+        "contexting",
+        "problem textiles",
+        "questionary",
+        "academic writing: ishikaga",
+        "context and solutions",
+        "translate all this",
+        "input=yoga",
+        "user=user:",
+        "$$",
+        "http://",
+        "www.",
+        ".com",
+        ".org",
+        "because ihops",
+        "atlasica",
+        "ravennaise",
+        "ninejustice.org",
+        "growthshoe",
+    ];
+    
+    let contamination_count = contamination_patterns.iter()
+        .filter(|pattern| output_lower.contains(*pattern))
+        .count();
+    
+    if contamination_count >= 2 {
+        return true; // Multiple contamination patterns detected
+    }
+    
+    // Check for fragments of training examples
+    if (output_lower.contains("question") && output_lower.contains("answer")) ||
+       (output_lower.contains("context") && output_lower.contains("documentation")) ||
+       (output_lower.contains("user") && output_lower.contains("ai")) ||
+       output_lower.contains("training") && output_lower.contains("model") {
+        return true;
+    }
+    
+    // Check for broken text patterns
+    if output.matches("{").count() != output.matches("}").count() ||
+       output.matches("[").count() != output.matches("]").count() ||
+       output.contains("$") && output.matches("$").count() > 3 {
+        return true;
+    }
+    
+    false
+}
+
+fn truncate_for_error(text: &str, max_len: usize) -> String {
+    if text.len() <= max_len {
+        text.to_string()
+    } else {
+        format!("{}...", &text[..max_len])
+    }
 }
