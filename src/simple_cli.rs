@@ -214,6 +214,75 @@ pub enum Commands {
         #[arg(long, help = "Language enhancement level", value_parser = ["none", "subtle", "moderate", "strong", "authentic"], default_value = "moderate")]
         language_enhancement: String,
     },
+    
+    #[command(about = "Super-intelligent writing with master AI system")]
+    Superintelligent {
+        #[arg(short, long, help = "Genre of the content")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(short = 'z', long, help = "Content size", default_value = "medium")]
+        size: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+        
+        #[arg(long, help = "Target number of chapters", default_value = "10")]
+        chapters: usize,
+        
+        #[arg(long, help = "Intelligence level (0.1-1.0)", default_value = "0.8")]
+        intelligence_level: f32,
+        
+        #[arg(long, help = "Learning acceleration factor", default_value = "1.5")]
+        learning_acceleration: f32,
+        
+        #[arg(long, help = "Creativity enhancement factor", default_value = "1.3")]
+        creativity_enhancement: f32,
+        
+        #[arg(long, help = "Enable autonomous improvement")]
+        autonomous_improvement: bool,
+        
+        #[arg(long, help = "Enable meta-cognition")]
+        meta_cognition: bool,
+        
+        #[arg(long, help = "Consciousness simulation level (0.1-1.0)", default_value = "0.6")]
+        consciousness_level: f32,
+        
+        #[arg(long, help = "Enable continuous learning")]
+        continuous_learning: bool,
+    },
+    
+    #[command(about = "Learning optimization and intelligence enhancement session")]
+    LearnOptimize {
+        #[arg(long, help = "Focus area for learning")]
+        focus: Option<String>,
+        
+        #[arg(long, help = "Target improvement percentage", default_value = "15")]
+        target_improvement: f32,
+        
+        #[arg(long, help = "Learning session duration in minutes", default_value = "30")]
+        duration: u32,
+        
+        #[arg(long, help = "Enable experimental learning modes")]
+        experimental: bool,
+        
+        #[arg(long, help = "Generate comprehensive learning report")]
+        detailed_report: bool,
+    },
 }
 
 // String to enum parsing functions

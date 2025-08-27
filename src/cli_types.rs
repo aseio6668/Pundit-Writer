@@ -135,7 +135,7 @@ impl std::fmt::Display for Genre {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub enum WritingStyle {
     Formal,
     Casual,
@@ -158,6 +158,11 @@ pub enum WritingStyle {
     FirstPerson,
     ThirdPerson,
     Omniscient,
+    Traditional,
+    Modern,
+    Experimental,
+    Concise,
+    Classical,
 }
 
 impl std::fmt::Display for WritingStyle {
@@ -184,11 +189,16 @@ impl std::fmt::Display for WritingStyle {
             WritingStyle::FirstPerson => write!(f, "First Person"),
             WritingStyle::ThirdPerson => write!(f, "Third Person"),
             WritingStyle::Omniscient => write!(f, "Omniscient"),
+            WritingStyle::Traditional => write!(f, "Traditional"),
+            WritingStyle::Modern => write!(f, "Modern"),
+            WritingStyle::Experimental => write!(f, "Experimental"),
+            WritingStyle::Concise => write!(f, "Concise"),
+            WritingStyle::Classical => write!(f, "Classical"),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub enum BookSize {
     ShortStory,    // ~1,000-7,500 words
     Short,         // ~20,000-50,000 words

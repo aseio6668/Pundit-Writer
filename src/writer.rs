@@ -13,6 +13,7 @@ use crate::resilient_writer::{create_resilient_writing_session, ResilientWriter,
 use crate::temporal_engine::{TemporalEngine, ChapterTemporalContext};
 use crate::advanced_creativity_engine::{AdvancedCreativityEngine, CreativeChapterPlan};
 use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, ChapterGenerationContext, GenerationMetrics, InterruptionType};
+use crate::self_healing_writer::{SelfHealingWriter, GenerationPhase, PausePoint, RetryOption};
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -38,7 +39,7 @@ impl std::error::Error for BackToMenu {}
 // Convenience type alias
 pub type MenuResult<T> = std::result::Result<T, anyhow::Error>;
 
-enum AIClient {
+pub enum AIClient {
     HuggingFace(HuggingFaceClient),
     Ollama(OllamaClient),
 }
@@ -4825,7 +4826,12 @@ async fn generate_segmented_content(
         // Add accumulated content from previous segments
         if !accumulated_content.is_empty() {
             let truncated_content = if accumulated_content.len() > MAX_CONTEXT_CHARS {
-                format!("...\n{}", &accumulated_content[accumulated_content.len() - MAX_CONTEXT_CHARS..])
+                // Safe character boundary slicing to avoid UTF-8 panics
+                let mut end_pos = accumulated_content.len().saturating_sub(MAX_CONTEXT_CHARS);
+                while end_pos > 0 && !accumulated_content.is_char_boundary(end_pos) {
+                    end_pos -= 1;
+                }
+                format!("...\n{}", &accumulated_content[end_pos..])
             } else {
                 accumulated_content.clone()
             };
@@ -6336,7 +6342,12 @@ async fn generate_continuation(
     // Create context-aware prompt for continuation
     let context_length = 2000; // Use last 2000 characters for context
     let context = if existing_content.len() > context_length {
-        &existing_content[existing_content.len() - context_length..]
+        // Safe character boundary slicing to avoid UTF-8 panics
+        let mut start_pos = existing_content.len().saturating_sub(context_length);
+        while start_pos > 0 && !existing_content.is_char_boundary(start_pos) {
+            start_pos -= 1;
+        }
+        &existing_content[start_pos..]
     } else {
         existing_content
     };
@@ -11483,6 +11494,342 @@ async fn generate_chapter_with_resilience(
     }
 
     Err(last_error.unwrap_or_else(|| anyhow!("Failed to generate chapter after {} attempts", max_retries)))
+}
+
+pub async fn self_healing_chapter_generation(
+    client: &AIClient,
+    model: &str,
+    prompt: &str,
+    chapter_num: usize,
+    size: &BookSize,
+    healing_writer: &mut SelfHealingWriter,
+    context_snapshot: &str,
+) -> Result<String> {
+    let phase = GenerationPhase::ChapterWriting;
+    let error_context = format!(
+        "Chapter {}: {}\n\nPrompt: {}", 
+        chapter_num, 
+        context_snapshot, 
+        prompt.chars().take(200).collect::<String>()
+    );
+
+    // First attempt: Try auto-healing
+    match healing_writer.attempt_auto_heal(
+        phase.clone(),
+        "Initiating chapter generation",
+        &error_context,
+    ) {
+        Ok(_) => {
+            // Auto-healing suggestions applied, try generation
+            match generate_chapter_with_resilience(client, model, prompt, chapter_num, size).await {
+                Ok(content) => {
+                    healing_writer.learn_from_error(
+                        phase,
+                        "Chapter generation successful with auto-healing",
+                        &error_context,
+                        None,
+                        true,
+                    );
+                    return Ok(content);
+                }
+                Err(e) => {
+                    // Auto-healing didn't work, create pause point
+                    let error_msg = format!("Chapter generation failed: {}", e);
+                    let pause_point = healing_writer.create_pause_point(
+                        phase.clone(),
+                        &error_msg,
+                        &error_context,
+                    );
+                    
+                    return handle_generation_pause_point(
+                        client,
+                        model,
+                        prompt,
+                        chapter_num,
+                        size,
+                        healing_writer,
+                        pause_point,
+                        &error_context,
+                    ).await;
+                }
+            }
+        }
+        Err(_) => {
+            // Try normal generation first
+            match generate_chapter_with_resilience(client, model, prompt, chapter_num, size).await {
+                Ok(content) => return Ok(content),
+                Err(e) => {
+                    let error_msg = format!("Chapter generation failed: {}", e);
+                    let pause_point = healing_writer.create_pause_point(
+                        phase,
+                        &error_msg,
+                        &error_context,
+                    );
+                    
+                    return handle_generation_pause_point(
+                        client,
+                        model,
+                        prompt,
+                        chapter_num,
+                        size,
+                        healing_writer,
+                        pause_point,
+                        &error_context,
+                    ).await;
+                }
+            }
+        }
+    }
+}
+
+async fn handle_generation_pause_point(
+    client: &AIClient,
+    model: &str,
+    prompt: &str,
+    chapter_num: usize,
+    size: &BookSize,
+    healing_writer: &mut SelfHealingWriter,
+    pause_point: PausePoint,
+    context: &str,
+) -> Result<String> {
+    println!("\n🚨 Generation encountered an issue!");
+    println!("📍 Pause Point: {}", pause_point.description);
+    println!("⏰ Time: {}", pause_point.timestamp.format("%Y-%m-%d %H:%M:%S"));
+    
+    loop {
+        println!("\n🔧 Available recovery options:");
+        let mut options = vec![
+            "View error details".to_string(),
+            "Show learning insights".to_string(),
+        ];
+        
+        for (i, retry_option) in pause_point.retry_options.iter().enumerate() {
+            options.push(format!(
+                "{} (Success rate: {:.0}%)",
+                retry_option.label,
+                retry_option.estimated_success_rate * 100.0
+            ));
+        }
+        
+        options.extend(vec![
+            "Manual prompt adjustment".to_string(),
+            "Continue with placeholder".to_string(),
+            "Exit generation".to_string(),
+        ]);
+
+        let selection = Select::new()
+            .with_prompt("Choose recovery action")
+            .items(&options)
+            .interact()?;
+
+        match selection {
+            0 => {
+                // View error details
+                println!("\n📋 Error Details:");
+                println!("   Phase: {}", phase_to_string(&pause_point.phase));
+                println!("   Description: {}", pause_point.description);
+                println!("   Context: {}", context.chars().take(300).collect::<String>());
+            }
+            1 => {
+                // Show learning insights
+                println!("\n🧠 Learning Insights:");
+                for insight in healing_writer.get_learning_insights() {
+                    println!("   {}", insight);
+                }
+            }
+            i if i >= 2 && i < 2 + pause_point.retry_options.len() => {
+                // Try one of the retry options
+                let retry_option = &pause_point.retry_options[i - 2];
+                println!("\n🔄 Applying strategy: {}", retry_option.label);
+                println!("   {}", retry_option.description);
+                
+                match apply_retry_strategy(
+                    client,
+                    model,
+                    prompt,
+                    chapter_num,
+                    size,
+                    &retry_option.strategy,
+                    healing_writer,
+                    context,
+                ).await {
+                    Ok(content) => {
+                        healing_writer.learn_from_error(
+                            pause_point.phase.clone(),
+                            &pause_point.description,
+                            context,
+                            Some(retry_option.strategy.clone()),
+                            true,
+                        );
+                        healing_writer.success_metrics.user_assisted_recoveries += 1;
+                        println!("✅ Recovery successful!");
+                        return Ok(content);
+                    }
+                    Err(e) => {
+                        healing_writer.learn_from_error(
+                            pause_point.phase.clone(),
+                            &pause_point.description,
+                            context,
+                            Some(retry_option.strategy.clone()),
+                            false,
+                        );
+                        println!("❌ Strategy failed: {}", e);
+                        println!("   Trying next option...");
+                        continue;
+                    }
+                }
+            }
+            i if i == 2 + pause_point.retry_options.len() => {
+                // Manual prompt adjustment
+                println!("\n✏️ Current prompt preview:");
+                println!("{}", prompt.chars().take(400).collect::<String>());
+                
+                let new_prompt: String = Input::new()
+                    .with_prompt("Enter adjusted prompt (or press Enter to keep current)")
+                    .allow_empty(true)
+                    .interact()?;
+                
+                let final_prompt = if new_prompt.trim().is_empty() {
+                    prompt
+                } else {
+                    &new_prompt
+                };
+                
+                match generate_chapter_with_resilience(client, model, final_prompt, chapter_num, size).await {
+                    Ok(content) => {
+                        println!("✅ Manual adjustment successful!");
+                        healing_writer.success_metrics.user_assisted_recoveries += 1;
+                        return Ok(content);
+                    }
+                    Err(e) => {
+                        println!("❌ Manual adjustment failed: {}", e);
+                        continue;
+                    }
+                }
+            }
+            i if i == 3 + pause_point.retry_options.len() => {
+                // Continue with placeholder
+                let placeholder = format!(
+                    "\n[Chapter {} - Generation paused due to technical issues]\n\
+                    [Placeholder content - to be completed later]\n\
+                    [Error: {}]\n\
+                    [Context: {}]\n\n",
+                    chapter_num,
+                    pause_point.description,
+                    context.chars().take(200).collect::<String>()
+                );
+                
+                healing_writer.success_metrics.user_assisted_recoveries += 1;
+                return Ok(placeholder);
+            }
+            _ => {
+                // Exit generation
+                return Err(anyhow!("User chose to exit generation"));
+            }
+        }
+    }
+}
+
+async fn apply_retry_strategy(
+    client: &AIClient,
+    model: &str,
+    prompt: &str,
+    chapter_num: usize,
+    size: &BookSize,
+    strategy: &crate::self_healing_writer::ResolutionStrategy,
+    healing_writer: &mut SelfHealingWriter,
+    context: &str,
+) -> Result<String> {
+    use crate::self_healing_writer::ResolutionStrategy;
+    
+    match strategy {
+        ResolutionStrategy::RetryWithDelay => {
+            println!("   ⏱️  Waiting 5 seconds before retry...");
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            generate_chapter_with_resilience(client, model, prompt, chapter_num, size).await
+        }
+        ResolutionStrategy::ReduceComplexity => {
+            let simplified_prompt = format!(
+                "Write a simple, clear chapter for a {} book. Focus on basic storytelling without complex literary devices.\n\n{}",
+                match size {
+                    BookSize::ShortStory => "short story",
+                    _ => "book",
+                },
+                prompt.chars().take(300).collect::<String>()
+            );
+            generate_chapter_with_resilience(client, model, &simplified_prompt, chapter_num, size).await
+        }
+        ResolutionStrategy::SplitIntoSmallerChunks => {
+            let chunk_size = match size {
+                BookSize::ShortStory | BookSize::Short => 200,
+                _ => 400,
+            };
+            
+            let words = prompt.split_whitespace().collect::<Vec<_>>();
+            let chunks: Vec<_> = words.chunks(50).collect();
+            let mut results = Vec::new();
+            
+            for (i, chunk) in chunks.iter().enumerate() {
+                let chunk_prompt = format!(
+                    "Write part {} of chapter {} (target {} words):\n{}",
+                    i + 1,
+                    chapter_num,
+                    chunk_size,
+                    chunk.join(" ")
+                );
+                
+                match generate_chapter_with_resilience(client, model, &chunk_prompt, chapter_num, size).await {
+                    Ok(content) => results.push(content),
+                    Err(e) => return Err(e),
+                }
+            }
+            
+            Ok(results.join("\n\n"))
+        }
+        ResolutionStrategy::SimplifyLanguage => {
+            let simple_prompt = format!(
+                "Write chapter {} using simple, clear language. Avoid complex vocabulary and focus on straightforward storytelling:\n\n{}",
+                chapter_num,
+                prompt.chars().take(400).collect::<String>()
+            );
+            generate_chapter_with_resilience(client, model, &simple_prompt, chapter_num, size).await
+        }
+        ResolutionStrategy::ChangeWritingStyle => {
+            let style_prompt = format!(
+                "Write chapter {} in a different style - focus on dialogue and action rather than description:\n\n{}",
+                chapter_num,
+                prompt.chars().take(400).collect::<String>()
+            );
+            generate_chapter_with_resilience(client, model, &style_prompt, chapter_num, size).await
+        }
+        ResolutionStrategy::RestartFromCheckpoint => {
+            let restart_prompt = format!(
+                "Start fresh with chapter {}. Create engaging content that advances the story:\n\n{}",
+                chapter_num,
+                prompt.chars().take(200).collect::<String>()
+            );
+            generate_chapter_with_resilience(client, model, &restart_prompt, chapter_num, size).await
+        }
+        _ => {
+            Err(anyhow!("Strategy not implemented for interactive recovery"))
+        }
+    }
+}
+
+fn phase_to_string(phase: &GenerationPhase) -> &'static str {
+    match phase {
+        GenerationPhase::ChapterPlanning => "Chapter Planning",
+        GenerationPhase::ChapterWriting => "Chapter Writing",
+        GenerationPhase::SceneGeneration => "Scene Generation",
+        GenerationPhase::DialogueCreation => "Dialogue Creation",
+        GenerationPhase::DescriptiveWriting => "Descriptive Writing",
+        GenerationPhase::CharacterDevelopment => "Character Development",
+        GenerationPhase::PlotAdvancement => "Plot Advancement",
+        GenerationPhase::TemporalContinuity => "Temporal Continuity",
+        GenerationPhase::CreativeEnhancement => "Creative Enhancement",
+        GenerationPhase::Formatting => "Formatting",
+        GenerationPhase::Finalization => "Finalization",
+    }
 }
 
 pub async fn historical_persona_writing_mode(

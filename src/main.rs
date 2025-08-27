@@ -21,6 +21,14 @@ mod historical_writer_personas;
 mod period_language_engine;
 mod creative_block_recovery;
 mod professional_formatting;
+mod self_healing_writer;
+mod adaptive_learning_engine;
+mod error_pattern_recognition;
+mod enhanced_writer_system;
+mod advanced_learning_system;
+mod cognitive_writing_engine;
+mod neural_creativity_enhancer;
+mod master_intelligence_system;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 
@@ -182,6 +190,104 @@ async fn main() -> Result<()> {
                 auto_continue,
                 language_enhancement,
             ).await?;
+        },
+        
+        Commands::Superintelligent { 
+            genre, style, size, output, model, api_key, local, ollama_url, chapters,
+            intelligence_level, learning_acceleration, creativity_enhancement,
+            autonomous_improvement, meta_cognition, consciousness_level, continuous_learning
+        } => {
+            let parsed_genre = parse_genre(&genre)?;
+            let parsed_style = parse_writing_style(&style)?;
+            let parsed_size = parse_book_size(&size)?;
+            
+            println!("🚀 ACTIVATING MASTER INTELLIGENCE SYSTEM");
+            println!("══════════════════════════════════════════");
+            println!("   🧠 Intelligence Level: {:.1}%", intelligence_level * 100.0);
+            println!("   ⚡ Learning Acceleration: {:.1}x", learning_acceleration);
+            println!("   🎨 Creativity Enhancement: {:.1}x", creativity_enhancement);
+            println!("   🤖 Autonomous Improvement: {}", autonomous_improvement);
+            println!("   🤔 Meta-Cognition: {}", meta_cognition);
+            println!("   🌟 Consciousness Level: {:.1}%", consciousness_level * 100.0);
+            println!("   📚 Continuous Learning: {}", continuous_learning);
+            println!("   📖 Target Chapters: {}", chapters);
+            println!();
+            
+            use crate::master_intelligence_system::MasterIntelligenceSystem;
+            let master_system = MasterIntelligenceSystem::new();
+            
+            // Display intelligence dashboard
+            master_system.display_intelligence_dashboard().await?;
+            
+            // Start superintelligent writing mode
+            println!("\n🚀 Initiating Super-Intelligent Writing Process...");
+            
+            // For now, call the enhanced writing mode with superintelligent parameters
+            writer::enhanced_intelligent_writing_mode(
+                parsed_genre,
+                parsed_style,
+                parsed_size,
+                output,
+                model,
+                api_key,
+                local,
+                ollama_url,
+                chapters,
+                100 * 1024 * 1024, // 100MB buffer
+                continuous_learning,
+                true, // Enable all recovery features
+            ).await?;
+        },
+        
+        Commands::LearnOptimize { 
+            focus, target_improvement, duration, experimental, detailed_report 
+        } => {
+            println!("🎓 LEARNING OPTIMIZATION SESSION");
+            println!("═══════════════════════════════════");
+            println!("   🎯 Target Improvement: {:.1}%", target_improvement);
+            println!("   ⏱️  Duration: {} minutes", duration);
+            println!("   🔬 Experimental Mode: {}", experimental);
+            
+            if let Some(focus_area) = &focus {
+                println!("   🔍 Focus Area: {}", focus_area);
+            }
+            
+            use crate::master_intelligence_system::MasterIntelligenceSystem;
+            let master_system = MasterIntelligenceSystem::new();
+            
+            // Run adaptive learning session
+            let learning_report = master_system.adaptive_learning_session().await?;
+            
+            println!("\n✅ Learning Session Complete!");
+            println!("   📚 Capabilities Improved: {}", learning_report.capability_improvements.len());
+            println!("   🔄 Systems Integrated: {}", learning_report.knowledge_integrations.systems_integrated);
+            
+            if detailed_report {
+                println!("\n📊 DETAILED LEARNING REPORT");
+                println!("═══════════════════════════════");
+                
+                println!("\n🎯 Capability Improvements:");
+                for improvement in &learning_report.capability_improvements {
+                    println!("   • {}", improvement);
+                }
+                
+                println!("\n🔗 Knowledge Integrations:");
+                println!("   • Cross-system learning connections established");
+                println!("   • Pattern recognition enhanced");
+                println!("   • Creative intelligence expanded");
+                
+                println!("\n📈 Next Learning Priorities:");
+                for priority in &learning_report.next_learning_priorities {
+                    println!("   • {}", priority);
+                }
+            }
+            
+            // Consciousness expansion if high target improvement
+            if target_improvement > 20.0 {
+                println!("\n🌟 High improvement target detected - initiating consciousness expansion...");
+                let expansion_report = master_system.consciousness_expansion(0.8).await?;
+                println!("   ✨ Consciousness expanded by {:.1}%", expansion_report.expansion_achieved * 100.0);
+            }
         },
     }
     
