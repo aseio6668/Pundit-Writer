@@ -354,7 +354,7 @@ impl CreativePromptEnhancer {
         }]
     }
 
-    fn generate_thematic_elements(&self, analysis: &PromptAnalysis, rng: &mut StdRng) -> Vec<NarrativeElement> {
+    fn generate_thematic_elements(&self, analysis: &PromptAnalysis, _rng: &mut StdRng) -> Vec<NarrativeElement> {
         let mut elements = Vec::new();
         
         // Add mood element
@@ -382,7 +382,7 @@ impl CreativePromptEnhancer {
         elements
     }
 
-    fn build_enhanced_prompt(&self, analysis: &PromptAnalysis, elements: &[NarrativeElement]) -> String {
+    fn build_enhanced_prompt(&self, _analysis: &PromptAnalysis, elements: &[NarrativeElement]) -> String {
         let mut enhanced = String::new();
         
         // Start with original prompt
@@ -438,7 +438,7 @@ impl CreativePromptEnhancer {
         directions
     }
 
-    fn generate_opening_direction(&self, elements: &[NarrativeElement], rng: &mut StdRng) -> String {
+    fn generate_opening_direction(&self, _elements: &[NarrativeElement], rng: &mut StdRng) -> String {
         let opening_approaches = match self.content_type {
             ContentType::ChildrensBook => vec![
                 "Begin with wonder and curiosity",
@@ -463,7 +463,7 @@ impl CreativePromptEnhancer {
         opening_approaches[rng.gen_range(0..opening_approaches.len())].to_string()
     }
 
-    fn generate_middle_direction(&self, elements: &[NarrativeElement], rng: &mut StdRng, section: usize) -> String {
+    fn generate_middle_direction(&self, _elements: &[NarrativeElement], rng: &mut StdRng, section: usize) -> String {
         let middle_approaches = vec![
             "Develop character relationships",
             "Explore the setting in detail",
@@ -479,7 +479,7 @@ impl CreativePromptEnhancer {
         format!("{} - Section {} should feel distinct and purposeful", base, section + 1)
     }
 
-    fn generate_closing_direction(&self, elements: &[NarrativeElement], rng: &mut StdRng) -> String {
+    fn generate_closing_direction(&self, _elements: &[NarrativeElement], rng: &mut StdRng) -> String {
         let closing_approaches = match self.content_type {
             ContentType::ChildrensBook => vec![
                 "End with warmth and satisfaction",
@@ -504,7 +504,7 @@ impl CreativePromptEnhancer {
         closing_approaches[rng.gen_range(0..closing_approaches.len())].to_string()
     }
 
-    fn generate_thematic_suggestions(&self, analysis: &PromptAnalysis, rng: &mut StdRng) -> Vec<String> {
+    fn generate_thematic_suggestions(&self, analysis: &PromptAnalysis, _rng: &mut StdRng) -> Vec<String> {
         let mut suggestions = analysis.themes.clone();
         
         // Add content-type specific themes

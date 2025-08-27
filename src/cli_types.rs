@@ -1,6 +1,6 @@
 // CLI types without clap derives to avoid stack overflow
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
 pub enum Genre {
     Fiction,
     NonFiction,

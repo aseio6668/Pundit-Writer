@@ -9,6 +9,10 @@ use crate::config::{Config, save_book_state};
 use crate::poetry_enhancements::{EnhancedPoetryPrompt, create_emotion_from_theme, post_process_poetry};
 use crate::continuation::{interactive_continuation_setup, continuation_project_to_content, ContinuationProject};
 use crate::dynamic_length::{DynamicSectionLength, generate_dynamic_section_lengths};
+use crate::resilient_writer::{create_resilient_writing_session, ResilientWriter, NonStopWritingMode};
+use crate::temporal_engine::{TemporalEngine, ChapterTemporalContext};
+use crate::advanced_creativity_engine::{AdvancedCreativityEngine, CreativeChapterPlan};
+use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, ChapterGenerationContext, GenerationMetrics, InterruptionType};
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -1455,7 +1459,7 @@ fn create_content_progress_bar(content: &Content) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} sections ({msg})")
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("#>-"),
     );
     pb.set_position(content.sections.len() as u64);
@@ -4451,7 +4455,7 @@ pub async fn write_strategic_doc(
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("#>-")
     );
     
@@ -4613,7 +4617,7 @@ pub async fn write_meeting_doc(
     progress_bar.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("#>-")
     );
     
@@ -6686,7 +6690,7 @@ async fn interactive_educational_textbook_creation() -> Result<()> {
                 .with_prompt("Enter the custom subject area")
                 .interact_text()?
         } else {
-            subjects[subject_idx].split(" - ").next().unwrap().to_string()
+            subjects[subject_idx].split(" - ").next().unwrap_or(&subjects[subject_idx]).to_string()
         };
         
         // Specific topic/course
@@ -6771,9 +6775,9 @@ async fn interactive_educational_textbook_creation() -> Result<()> {
         };
         
         // Create comprehensive prompt for educational textbook
-        let education_level = education_levels[level_idx].split(" - ").next().unwrap();
-        let scope_description = scopes[scope_idx].split(" - ").next().unwrap();
-        let approach = approaches[approach_idx].split(" - ").next().unwrap();
+        let education_level = education_levels[level_idx].split(" - ").next().unwrap_or(&education_levels[level_idx]);
+        let scope_description = scopes[scope_idx].split(" - ").next().unwrap_or(&scopes[scope_idx]);
+        let approach = approaches[approach_idx].split(" - ").next().unwrap_or(&approaches[approach_idx]);
         
         let enhanced_prompt = format!(
             "Create a comprehensive educational textbook for {} students studying {}: {}.
@@ -7046,7 +7050,7 @@ async fn write_dictionary(
     let progress_bar = ProgressBar::new(total_sections as u64);
     progress_bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} sections ({percent}%)")
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"));
     
     for section_num in 1..=total_sections {
@@ -7170,7 +7174,7 @@ async fn write_educational_lesson(
     let progress_bar = ProgressBar::new(target_sections as u64);
     progress_bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} sections ({percent}%)")
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"));
     
     for section_num in 1..=target_sections {
@@ -7291,7 +7295,7 @@ async fn write_childrens_book(
     let progress_bar = ProgressBar::new(target_chapters as u64);
     progress_bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({percent}%)")
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"));
     
     for chapter_num in 1..=target_chapters {
@@ -7873,7 +7877,7 @@ async fn create_science_textbook() -> Result<()> {
                 .with_prompt("Enter the science subject")
                 .interact_text()?
         } else {
-            subjects[subject_idx].split(" - ").next().unwrap().to_string()
+            subjects[subject_idx].split(" - ").next().unwrap_or(&subjects[subject_idx]).to_string()
         };
         
         // Education level
@@ -8091,7 +8095,7 @@ async fn write_language_learning_book(
     let progress_bar = ProgressBar::new(lesson_count as u64);
     progress_bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} lessons ({percent}%)")
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"));
     
     for lesson_num in 1..=lesson_count {
@@ -8183,7 +8187,7 @@ async fn write_science_textbook(
     let progress_bar = ProgressBar::new(chapter_count as u64);
     progress_bar.set_style(ProgressStyle::default_bar()
         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({percent}%)")
-        .unwrap()
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
         .progress_chars("#>-"));
     
     for chapter_num in 1..=chapter_count {
@@ -9667,7 +9671,7 @@ async fn generate_multiplot_chapters(content: &mut Content, model: &str) -> Resu
         let progress_bar = ProgressBar::new(total_chapters as u64);
         progress_bar.set_style(ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} chapters ({eta})")
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("#>-"));
         
         for chapter_num in 1..=total_chapters {
@@ -9679,7 +9683,7 @@ async fn generate_multiplot_chapters(content: &mut Content, model: &str) -> Resu
             let current_plot = world_state.plot_threads
                 .iter()
                 .find(|p| p.id == *current_plot_id)
-                .unwrap();
+                .expect("Plot ID should exist in multi-plot system");
             
             progress_bar.set_message(format!("Writing Chapter {}: {} storyline", chapter_num, current_plot.name));
             
@@ -10308,7 +10312,7 @@ async fn add_file_to_freeform_project(project: &mut ContinuationProject) -> anyh
 
         match project.add_file(path.clone()) {
             Ok(_) => {
-                let file = project.files.last().unwrap();
+                let file = project.files.last().expect("File should have been added to project");
                 if file.exists {
                     println!("✅ Added: {} ({} words)", path.display(), file.word_count);
                 } else {
@@ -10522,7 +10526,7 @@ fn analyze_freeform_prompt(prompt: &str, files: &[crate::continuation::Continuat
     }
 
     // Find the highest confidence format
-    if let Some((format, score)) = format_scores.iter().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()) {
+    if let Some((format, score)) = format_scores.iter().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)) {
         detected_format = format.to_string();
         confidence = *score;
     } else {
@@ -10980,4 +10984,942 @@ fn truncate_for_error(text: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &text[..max_len])
     }
+}
+
+pub async fn non_stop_writing_mode(
+    genre: Genre,
+    style: WritingStyle,
+    size: BookSize,
+    output: Option<PathBuf>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+    sections: usize,
+    buffer_size: usize,
+    auto_continue: bool,
+) -> Result<()> {
+    println!("🚀 Initializing Non-Stop Writing Mode...");
+    
+    let output_path = output.unwrap_or_else(|| {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        PathBuf::from(format!("NonStop_{}_{}.txt", genre, timestamp))
+    });
+
+    println!("📁 Output file: {}", output_path.display());
+    
+    let config = Config::load()?;
+    
+    let client = if use_local {
+        println!("🏠 Using local Ollama server at: {}", ollama_url);
+        let ollama_client = OllamaClient::new(ollama_url.clone())?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+
+    check_model_availability(&client, &model).await?;
+
+    let mut writing_session = create_resilient_writing_session(
+        output_path.clone(),
+        buffer_size,
+        sections,
+    );
+    
+    writing_session.enable_auto_continue(auto_continue);
+    
+    println!("🎯 Generating creative premise for {} {} story...", genre, style);
+    
+    let premise = generate_creative_premise(&client, &genre, &style, &model).await?;
+    println!("💡 Premise: {}", premise);
+    
+    let result = writing_session.run(|section_num| {
+        generate_section_content(
+            &client,
+            &model,
+            &genre,
+            &style,
+            &size,
+            &premise,
+            section_num,
+            sections,
+        )
+    }).await?;
+
+    println!("✅ Non-stop writing completed!");
+    println!("📊 Final statistics:");
+    println!("   Total words: {}", count_words(&result));
+    println!("   Total sections: {}", sections);
+    println!("   Output file: {}", output_path.display());
+    
+    Ok(())
+}
+
+async fn generate_creative_premise(
+    client: &AIClient,
+    genre: &Genre,
+    style: &WritingStyle,
+    model: &str,
+) -> Result<String> {
+    let premise_prompt = format!(
+        "Create a compelling and original premise for a {} story written in {} style. \
+         The premise should be 2-3 sentences that establish the main character, conflict, \
+         and unique hook. Make it creative and engaging.",
+        genre, style
+    );
+
+    let premise = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&premise_prompt, 150u32, 0.8).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &premise_prompt, 150i32, 0.8).await?
+        }
+    };
+
+    Ok(premise.trim().to_string())
+}
+
+async fn generate_section_content(
+    client: &AIClient,
+    model: &str,
+    genre: &Genre,
+    style: &WritingStyle,
+    size: &BookSize,
+    premise: &str,
+    section_num: usize,
+    total_sections: usize,
+) -> Result<String> {
+    let words_per_section = match size {
+        BookSize::ShortStory => 200,
+        BookSize::Short => 400,
+        BookSize::Medium => 600,
+        BookSize::Large => 800,
+        BookSize::VeryLarge => 1200,
+        BookSize::Epic => 1000,
+        BookSize::Unlimited => 1500,
+    };
+
+    let section_prompt = format!(
+        "Continue this {} story in {} style. This is section {} of {}.\n\n\
+         Premise: {}\n\n\
+         Write approximately {} words that:\n\
+         - Advances the plot naturally\n\
+         - Develops characters\n\
+         - Maintains consistent tone and style\n\
+         - Creates engaging narrative flow\n\
+         - Ends with natural transition to next section\n\n\
+         Section content:",
+        genre, style, section_num, total_sections, premise, words_per_section
+    );
+
+    let section_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&section_prompt, words_per_section as u32, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &section_prompt, words_per_section as i32, 0.7).await?
+        }
+    };
+
+    let cleaned_content = clean_ai_output(&section_content);
+    
+    Ok(format!("\n## Section {}\n\n{}\n", section_num, cleaned_content))
+}
+
+fn clean_ai_output(content: &str) -> String {
+    content
+        .trim()
+        .lines()
+        .filter(|line| {
+            !line.trim().is_empty() && 
+            !line.starts_with("Section") &&
+            !line.starts_with("##") &&
+            !line.contains("Section content:")
+        })
+        .collect::<Vec<&str>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
+pub async fn enhanced_intelligent_writing_mode(
+    genre: Genre,
+    style: WritingStyle,
+    size: BookSize,
+    output: Option<PathBuf>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+    chapters: usize,
+    buffer_size: usize,
+    auto_continue: bool,
+    interruption_recovery: bool,
+) -> Result<()> {
+    println!("🧠 Enhanced Intelligent Writing Mode Initializing...");
+    println!("   🎯 Advanced creativity optimization enabled");
+    println!("   ⏰ Temporal continuity engine active");
+    println!("   📊 Intelligent progression tracking online");
+    
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let output_path = output.unwrap_or_else(|| {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        PathBuf::from(format!("Enhanced_{}_{}.txt", genre, timestamp))
+    });
+
+    // Initialize advanced systems
+    let mut temporal_engine = TemporalEngine::new();
+    let mut creativity_engine = AdvancedCreativityEngine::new(&genre, &style, &ContentType::Book);
+    let mut progression_tracker = IntelligentProgressionTracker::new(session_id.clone(), chapters);
+
+    // Setup AI client
+    let config = Config::load()?;
+    let client = if use_local {
+        println!("🏠 Using local Ollama server at: {}", ollama_url);
+        let ollama_client = OllamaClient::new(ollama_url.clone())?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+
+    check_model_availability(&client, &model).await?;
+
+    // Generate story premise with enhanced creativity
+    println!("🎨 Generating enhanced creative premise...");
+    let premise = generate_enhanced_creative_premise(&client, &model, &genre, &style, &mut creativity_engine).await?;
+    println!("💡 Enhanced Premise: {}", premise);
+
+    let mut content_buffer = String::with_capacity(buffer_size);
+    let mut full_story_context = String::new();
+
+    // Initialize content structure - using placeholder values for now
+    let mut content = Content::new(
+        "Enhanced Story".to_string(),        // title
+        "AI Writer".to_string(),             // author
+        genre.to_string(),                   // genre
+        style.to_string(),                   // writing_style
+        premise.clone(),                     // premise
+        size.to_string(),                    // target_size
+        None,                               // target_word_count
+        chapters,                           // target_chapters
+        model.clone()                       // model
+    );
+
+    // Chapter generation loop with intelligent systems
+    for chapter_num in 1..=chapters {
+        println!("\n📖 === CHAPTER {} GENERATION === ", chapter_num);
+        
+        // Prepare chapter with intelligent analysis
+        let generation_context = progression_tracker
+            .prepare_for_chapter(chapter_num, interruption_recovery && chapter_num == 3)?;
+        
+        // Analyze temporal context
+        let temporal_context = temporal_engine
+            .analyze_chapter_context(chapter_num, &content)?;
+        
+        // Generate creative chapter plan
+        let creative_plan = creativity_engine
+            .generate_creative_chapter_plan(chapter_num, &full_story_context, interruption_recovery && chapter_num == 3)?;
+
+        println!("   🧭 Story Analysis: {:.1}% progress, {} active threads", 
+            generation_context.story_analysis.progress_percentage,
+            generation_context.story_analysis.active_thread_count);
+        
+        println!("   🎭 Creative Focus: {:?}", creative_plan.creative_focus);
+        println!("   ⏱️  Temporal Context: Chapter {} timeframe", chapter_num);
+
+        // Generate enhanced prompt
+        let base_prompt = create_enhanced_chapter_prompt(&premise, chapter_num, chapters, &size, &genre, &style)?;
+        
+        // Layer on temporal enhancements
+        let temporal_enhanced_prompt = temporal_engine
+            .generate_temporal_prompt_enhancement(chapter_num, &base_prompt, &temporal_context)?;
+        
+        // Layer on creativity enhancements
+        let fully_enhanced_prompt = creativity_engine
+            .enhance_prompt_with_creativity(&temporal_enhanced_prompt, &creative_plan)?;
+
+        println!("   📝 Enhanced prompt prepared ({} characters)", fully_enhanced_prompt.len());
+
+        // Generate chapter with resilience
+        let generation_start = std::time::Instant::now();
+        let mut generation_metrics = GenerationMetrics {
+            generation_duration: chrono::Duration::seconds(0),
+            interruptions: vec![],
+        };
+
+        let chapter_content = match generate_chapter_with_resilience(
+            &client,
+            &model,
+            &fully_enhanced_prompt,
+            chapter_num,
+            &size,
+        ).await {
+            Ok(content) => content,
+            Err(e) => {
+                println!("   ⚠️  Generation error: {}", e);
+                
+                // Handle interruption intelligently
+                let interruption_plan = progression_tracker
+                    .handle_interruption(InterruptionType::SystemError, chapter_num)?;
+                
+                println!("   🔄 Applying intelligent recovery...");
+                
+                // Retry with recovery context
+                generate_chapter_with_resilience(
+                    &client,
+                    &model,
+                    &fully_enhanced_prompt,
+                    chapter_num,
+                    &size,
+                ).await?
+            }
+        };
+
+        let elapsed = generation_start.elapsed();
+        generation_metrics.generation_duration = chrono::Duration::from_std(elapsed).unwrap_or(chrono::Duration::seconds(0));
+
+        // Process generated chapter
+        let processing_result = progression_tracker
+            .process_generated_chapter(chapter_num, &chapter_content, generation_metrics)?;
+
+        // Update temporal engine
+        temporal_engine.update_after_chapter(chapter_num, &chapter_content)?;
+
+        // Add to content buffer and full context
+        let formatted_chapter = format!("\n## Chapter {}\n\n{}\n", chapter_num, chapter_content);
+        content_buffer.push_str(&formatted_chapter);
+        full_story_context.push_str(&formatted_chapter);
+        
+        // Maintain context window size
+        if full_story_context.len() > 50000 {
+            let words: Vec<&str> = full_story_context.split_whitespace().collect();
+            let keep_words = words.len().saturating_sub(10000);
+            full_story_context = words[keep_words..].join(" ");
+        }
+
+        println!("   ✅ Chapter {} completed", chapter_num);
+        println!("   📊 Quality: {:.1}/10 | Innovation: {:.1}/10 | Coherence: {:.1}/10", 
+            processing_result.quality_assessment.overall_score * 10.0,
+            processing_result.quality_assessment.originality_score * 10.0,
+            processing_result.quality_assessment.narrative_coherence * 10.0);
+
+        // Auto-save progress
+        if chapter_num % 3 == 0 {
+            fs::write(&output_path, &content_buffer)?;
+            println!("   💾 Progress auto-saved");
+        }
+
+        // Pause for user input if not auto-continue
+        if !auto_continue && chapter_num < chapters {
+            println!("   ⏸️  Press Enter to continue or Ctrl+C to stop...");
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+        }
+    }
+
+    // Final save
+    fs::write(&output_path, &content_buffer)?;
+
+    // Generate completion report
+    println!("\n🎉 === ENHANCED WRITING COMPLETED === ");
+    println!("📈 Final Statistics:");
+    println!("   📖 Total chapters: {}", chapters);
+    println!("   📝 Total words: {}", count_words(&content_buffer));
+    println!("   📁 Saved to: {}", output_path.display());
+    println!("   🧠 Advanced systems used: Temporal Engine, Creativity Optimizer, Progression Tracker");
+    
+    Ok(())
+}
+
+async fn generate_enhanced_creative_premise(
+    client: &AIClient,
+    model: &str,
+    genre: &Genre,
+    style: &WritingStyle,
+    creativity_engine: &mut AdvancedCreativityEngine,
+) -> Result<String> {
+    let base_premise_prompt = format!(
+        "Create an exceptionally compelling and original premise for a {} story written in {} style. \
+         The premise should be 3-4 sentences that establish:\n\
+         1. A unique protagonist with clear motivation\n\
+         2. An original central conflict with high stakes\n\
+         3. A distinctive story world or setting\n\
+         4. An intriguing hook that promises depth and complexity\n\n\
+         Make it creative, engaging, and avoid common tropes.",
+        genre, style
+    );
+
+    // Generate creative plan for premise
+    let premise_plan = creativity_engine.generate_creative_chapter_plan(0, "", false)?;
+    let enhanced_premise_prompt = creativity_engine.enhance_prompt_with_creativity(&base_premise_prompt, &premise_plan)?;
+
+    let premise = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&enhanced_premise_prompt, 200u32, 0.9).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &enhanced_premise_prompt, 200i32, 0.9).await?
+        }
+    };
+
+    Ok(premise.trim().to_string())
+}
+
+fn create_enhanced_chapter_prompt(
+    premise: &str,
+    chapter_num: usize,
+    total_chapters: usize,
+    size: &BookSize,
+    genre: &Genre,
+    style: &WritingStyle,
+) -> Result<String> {
+    let words_per_chapter = match size {
+        BookSize::ShortStory => 300,
+        BookSize::Short => 600,
+        BookSize::Medium => 800,
+        BookSize::Large => 1000,
+        BookSize::VeryLarge => 1400,
+        BookSize::Epic => 1200,
+        BookSize::Unlimited => 1600,
+    };
+
+    let chapter_context = if chapter_num == 1 {
+        "This is the opening chapter. Establish the protagonist, setting, and central conflict while creating an engaging hook."
+    } else if chapter_num == 3 {
+        "This is a crucial chapter that should deepen the conflict and reveal important information that changes the reader's understanding. This chapter often determines if readers continue."
+    } else if chapter_num == total_chapters {
+        "This is the final chapter. Resolve the main conflict, provide emotional satisfaction, and conclude character arcs meaningfully."
+    } else if chapter_num > total_chapters / 2 {
+        "This chapter is in the latter half of the story. Escalate tension, develop character relationships, and build toward the climax."
+    } else {
+        "This chapter should develop the plot, deepen characterization, and maintain narrative momentum."
+    };
+
+    Ok(format!(
+        "Write Chapter {} of a {} {} story in {} style.\n\n\
+         PREMISE: {}\n\n\
+         CHAPTER CONTEXT: {}\n\n\
+         TARGET LENGTH: Approximately {} words\n\n\
+         WRITING REQUIREMENTS:\n\
+         - Write in engaging, immersive prose that matches the {} style\n\
+         - Develop characters through action and dialogue, not exposition\n\
+         - Advance the main plot while developing subplots\n\
+         - Create vivid, sensory-rich scenes that draw readers in\n\
+         - End with a natural transition or compelling hook for the next chapter\n\
+         - Maintain consistent tone and voice throughout\n\
+         - Show don't tell - let events and dialogue reveal character and plot\n\n\
+         Write only the chapter content, no titles or meta-commentary:",
+        chapter_num,
+        genre,
+        size.to_string(),
+        style,
+        premise,
+        chapter_context,
+        words_per_chapter,
+        style
+    ))
+}
+
+async fn generate_chapter_with_resilience(
+    client: &AIClient,
+    model: &str,
+    prompt: &str,
+    chapter_num: usize,
+    size: &BookSize,
+) -> Result<String> {
+    let words_per_chapter = match size {
+        BookSize::ShortStory => 300,
+        BookSize::Short => 600,
+        BookSize::Medium => 800,
+        BookSize::Large => 1000,
+        BookSize::VeryLarge => 1400,
+        BookSize::Epic => 1200,
+        BookSize::Unlimited => 1600,
+    };
+
+    let max_retries = 3;
+    let mut last_error = None;
+
+    for attempt in 1..=max_retries {
+        match client {
+            AIClient::HuggingFace(hf_client) => {
+                match hf_client.generate_text(prompt, words_per_chapter as u32, 0.8).await {
+                    Ok(content) => {
+                        let cleaned = clean_ai_output(&content);
+                        if cleaned.split_whitespace().count() > 50 {
+                            return Ok(cleaned);
+                        } else {
+                            last_error = Some(anyhow!("Generated content too short"));
+                        }
+                    },
+                    Err(e) => last_error = Some(e),
+                }
+            },
+            AIClient::Ollama(ollama_client) => {
+                match ollama_client.generate_text(model, prompt, words_per_chapter as i32, 0.8).await {
+                    Ok(content) => {
+                        let cleaned = clean_ai_output(&content);
+                        if cleaned.split_whitespace().count() > 50 {
+                            return Ok(cleaned);
+                        } else {
+                            last_error = Some(anyhow!("Generated content too short"));
+                        }
+                    },
+                    Err(e) => last_error = Some(e),
+                }
+            }
+        }
+
+        if attempt < max_retries {
+            println!("   🔄 Retry attempt {} for Chapter {}", attempt + 1, chapter_num);
+            tokio::time::sleep(Duration::from_secs(2 * attempt as u64)).await;
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| anyhow!("Failed to generate chapter after {} attempts", max_retries)))
+}
+
+pub async fn historical_persona_writing_mode(
+    genre: Genre,
+    style: WritingStyle,
+    size: BookSize,
+    output: Option<PathBuf>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+    chapters: usize,
+    writer: Option<String>,
+    era: Option<String>,
+    auto_continue: bool,
+    language_enhancement: String,
+) -> Result<()> {
+    use crate::historical_writer_personas::{HistoricalWriterPersonas, LiteraryEra};
+    use crate::period_language_engine::{PeriodLanguageEngine, LanguageEnhancementLevel};
+    use crate::creative_block_recovery::{CreativeBlockRecovery, CreativeBlockType};
+    use crate::professional_formatting::{ProfessionalFormatter, PublishingType, ChapterTitleStyle, SceneBreakStyle, ChapterCreativeElement};
+
+    println!("🎭 Historical Writer Persona Mode Initializing...");
+    println!("   📚 Loading literary masters database...");
+    println!("   🕰️  Period language systems online...");
+    
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let output_path = output.unwrap_or_else(|| {
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let persona_name = writer.as_ref().unwrap_or(&"HistoricalMaster".to_string()).clone();
+        PathBuf::from(format!("Persona_{}_{}.txt", persona_name, timestamp))
+    });
+
+    // Initialize persona systems
+    let persona_system = HistoricalWriterPersonas::new();
+    let language_engine = PeriodLanguageEngine::new();
+    
+    // Parse language enhancement level
+    let enhancement_level = match language_enhancement.to_lowercase().as_str() {
+        "none" => LanguageEnhancementLevel::None,
+        "subtle" => LanguageEnhancementLevel::Subtle,
+        "moderate" => LanguageEnhancementLevel::Moderate,
+        "strong" => LanguageEnhancementLevel::Strong,
+        "authentic" => LanguageEnhancementLevel::Authentic,
+        _ => LanguageEnhancementLevel::Moderate,
+    };
+
+    // Select writer persona
+    let selected_persona = if let Some(writer_name) = &writer {
+        persona_system.get_persona_by_name(writer_name)
+            .unwrap_or_else(|| {
+                println!("⚠️  Writer '{}' not found. Using Hemingway as default.", writer_name);
+                persona_system.get_persona_by_name("hemingway").unwrap()
+            })
+    } else if let Some(era_name) = &era {
+        let literary_era = match era_name.as_str() {
+            "classical" => LiteraryEra::Classical,
+            "medieval" => LiteraryEra::Medieval,
+            "renaissance" => LiteraryEra::Renaissance,
+            "enlightenment" => LiteraryEra::Enlightenment,
+            "romantic" => LiteraryEra::Romantic,
+            "victorian" => LiteraryEra::Victorian,
+            "modernist" => LiteraryEra::Modernist,
+            "contemporary" => LiteraryEra::Contemporary,
+            _ => LiteraryEra::Victorian,
+        };
+        persona_system.get_persona_by_era(&literary_era)
+            .unwrap_or_else(|| persona_system.get_persona_by_name("dickens").unwrap())
+    } else {
+        // Default to appropriate persona for the genre
+        match genre {
+            Genre::Adventure | Genre::Action => persona_system.get_persona_by_name("hemingway").unwrap(),
+            Genre::Horror | Genre::Mystery => persona_system.get_persona_by_name("poe").unwrap(),
+            Genre::Romance | Genre::Drama => persona_system.get_persona_by_name("austen").unwrap(),
+            Genre::Literary | Genre::Experimental => persona_system.get_persona_by_name("woolf").unwrap(),
+            _ => persona_system.get_persona_by_name("dickens").unwrap(),
+        }
+    };
+
+    println!("   🎨 Selected Persona: {} ({})", 
+        selected_persona.writer_name, 
+        selected_persona.era.to_string());
+    println!("   📖 Literary Movement: {:?}", selected_persona.movement);
+    println!("   ✍️  Philosophy: {}", selected_persona.writing_philosophy.core_beliefs.first().unwrap_or(&"Literary truth through authentic expression".to_string()));
+
+    // Initialize temporal and creativity engines
+    let mut temporal_engine = TemporalEngine::new();
+    let mut creativity_engine = AdvancedCreativityEngine::new(&genre, &style, &ContentType::Book);
+    let mut block_recovery = CreativeBlockRecovery::new(&genre);
+    let formatter = ProfessionalFormatter::new();
+    
+    // Track generation metrics for block detection
+    let mut recent_content: Vec<String> = Vec::new();
+    let mut generation_times: Vec<Duration> = Vec::new();
+    let mut error_count = 0;
+
+    // Setup AI client
+    let config = Config::load()?;
+    let client = if use_local {
+        println!("🏠 Using local Ollama server at: {}", ollama_url);
+        let ollama_client = OllamaClient::new(ollama_url.clone())?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+
+    check_model_availability(&client, &model).await?;
+
+    // Generate persona-enhanced story premise
+    println!("🌟 Generating story premise in {} style...", selected_persona.writer_name);
+    let premise = generate_persona_premise(&client, &model, &genre, &style, &selected_persona).await?;
+    println!("💡 Premise: {}", premise);
+
+    let mut content_buffer = String::with_capacity(100 * 1024 * 1024); // 100MB buffer
+    let mut full_story_context = String::new();
+
+    // Initialize content structure  
+    let mut content = Content::new(
+        format!("{} Style Story", selected_persona.writer_name), // title
+        format!("AI in the style of {}", selected_persona.writer_name), // author
+        genre.to_string(),                   // genre
+        style.to_string(),                   // writing_style
+        premise.clone(),                     // premise
+        size.to_string(),                    // target_size
+        None,                               // target_word_count
+        chapters,                           // target_chapters
+        model.clone()                       // model
+    );
+
+    // Chapter generation loop
+    for chapter_num in 1..=chapters {
+        println!("\n🎭 === CHAPTER {} GENERATION ({} STYLE) ===", chapter_num, selected_persona.writer_name);
+        
+        // Analyze temporal context
+        let temporal_context = temporal_engine.analyze_chapter_context(chapter_num, &content)?;
+        
+        // Generate creative chapter plan with persona influence
+        let creative_plan = creativity_engine.generate_creative_chapter_plan(
+            chapter_num, 
+            &full_story_context, 
+            false
+        )?;
+
+        println!("   📚 Writing in {} tradition", selected_persona.movement);
+        println!("   🎯 Chapter focus: {:?}", creative_plan.creative_focus);
+
+        // Create persona-enhanced prompt
+        let base_prompt = create_persona_chapter_prompt(
+            &premise, 
+            chapter_num, 
+            chapters, 
+            &size, 
+            &genre, 
+            &style,
+            &selected_persona
+        )?;
+        
+        // Layer on temporal enhancements
+        let temporal_enhanced_prompt = temporal_engine.generate_temporal_prompt_enhancement(
+            chapter_num, 
+            &base_prompt, 
+            &temporal_context
+        )?;
+        
+        // Layer on creativity enhancements
+        let creativity_enhanced_prompt = creativity_engine.enhance_prompt_with_creativity(
+            &temporal_enhanced_prompt, 
+            &creative_plan
+        )?;
+
+        // Apply persona-specific prompt enhancements
+        let fully_enhanced_prompt = persona_system.enhance_prompt_with_persona(
+            &creativity_enhanced_prompt,
+            &selected_persona
+        )?;
+
+        println!("   📝 Persona-enhanced prompt ready ({} characters)", fully_enhanced_prompt.len());
+
+        // Generate chapter content with persona influence
+        let generation_start = std::time::Instant::now();
+        
+        let raw_chapter_content = match generate_chapter_with_resilience(
+            &client,
+            &model,
+            &fully_enhanced_prompt,
+            chapter_num,
+            &size
+        ).await {
+            Ok(content) => content,
+            Err(e) => {
+                error_count += 1;
+                println!("   ⚠️  Generation error encountered: {}", e);
+                
+                // Check for creative block and apply recovery if needed
+                if let Some(block_type) = block_recovery.detect_creative_block(
+                    &recent_content,
+                    &generation_times,
+                    error_count,
+                    chapter_num
+                )? {
+                    println!("   🚫 Creative block detected: {:?}", block_type);
+                    
+                    // Initiate sleep reflection mode
+                    let reflection_result = block_recovery.initiate_sleep_reflection(
+                        &full_story_context,
+                        chapter_num
+                    )?;
+                    
+                    // Apply renewal strategy
+                    let renewal_strategies = block_recovery.renewal_strategies.clone();
+                    if let Some(strategy) = renewal_strategies.first() {
+                        let renewal_outcome = block_recovery.apply_renewal_strategy(
+                            strategy,
+                            &full_story_context,
+                            chapter_num
+                        )?;
+                        
+                        // Enhance prompt with renewal insights
+                        let renewed_prompt = format!(
+                            "{}\n\nREFLECTIVE RENEWAL: {}\n\nCreative Direction: {}",
+                            fully_enhanced_prompt,
+                            renewal_outcome.renewed_prompt_enhancement,
+                            reflection_result.morning_renewal.narrative_direction
+                        );
+                        
+                        // Retry with renewed approach
+                        generate_chapter_with_resilience(
+                            &client,
+                            &model,
+                            &renewed_prompt,
+                            chapter_num,
+                            &size
+                        ).await?
+                    } else {
+                        return Err(e);
+                    }
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
+        let generation_duration = generation_start.elapsed();
+        generation_times.push(generation_duration);
+        recent_content.push(raw_chapter_content.chars().take(500).collect::<String>());
+        
+        // Keep only recent content for block detection
+        if recent_content.len() > 5 {
+            recent_content.remove(0);
+        }
+        if generation_times.len() > 5 {
+            generation_times.remove(0);
+        }
+
+        println!("   ⏱️  Generation took: {:.1}s", generation_duration.as_secs_f64());
+
+        // Apply period language enhancement
+        println!("   🎨 Applying {} era language enhancement...", selected_persona.era.to_string());
+        let enhanced_content = language_engine.enhance_text_with_period_language(
+            &raw_chapter_content,
+            &selected_persona.era,
+            &enhancement_level
+        )?;
+
+        // Apply persona-specific style enhancements
+        let styled_content = persona_system.apply_persona_style_enhancements(
+            &enhanced_content,
+            &selected_persona
+        )?;
+
+        // Apply professional formatting
+        let chapter_header = formatter.create_chapter_header(
+            chapter_num,
+            Some(&format!("Chapter {}", chapter_num)),
+            &ChapterTitleStyle::Descriptive,
+            &vec![ChapterCreativeElement::Ornamental("❦ ❦ ❦".to_string())]
+        );
+        
+        let formatted_content = formatter.apply_creative_scene_breaks(
+            &styled_content,
+            &SceneBreakStyle::TripleStar,
+            &genre
+        );
+
+        let final_chapter_content = format!("{}{}", chapter_header, formatted_content);
+
+        println!("   ✨ Enhanced with {} period characteristics", selected_persona.era.to_string());
+        println!("   📊 Chapter {} complete: {} words", 
+            chapter_num, 
+            final_chapter_content.split_whitespace().count());
+
+        // Add to content buffer and context
+        content_buffer.push_str(&format!("\n\n=== CHAPTER {} ===\n\n{}", chapter_num, final_chapter_content));
+        full_story_context.push_str(&format!(" Chapter {}: {}", chapter_num, 
+            final_chapter_content.chars().take(200).collect::<String>()));
+
+        // Write to file after each chapter for safety
+        std::fs::write(&output_path, &content_buffer)?;
+        println!("   💾 Progress saved to {}", output_path.display());
+
+        // Auto-continue check
+        if !auto_continue && chapter_num < chapters {
+            println!("\n⏸️  Continue to Chapter {} (y/N)?", chapter_num + 1);
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if !input.trim().to_lowercase().starts_with('y') {
+                println!("📖 Story generation paused. Current progress saved.");
+                break;
+            }
+        }
+
+        // Brief pause between chapters for system stability
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    // Apply final professional manuscript formatting
+    println!("📖 Applying final manuscript formatting for publishing...");
+    let formatted_manuscript = formatter.format_manuscript(
+        &content_buffer,
+        &genre,
+        Some(&selected_persona.era),
+        &PublishingType::Literary
+    )?;
+
+    // Write professionally formatted version
+    let formatted_path = output_path.with_extension("formatted.txt");
+    std::fs::write(&formatted_path, &formatted_manuscript.content)?;
+
+    println!("\n🎉 Historical Persona Writing Complete!");
+    println!("   📄 Final output: {}", output_path.display());
+    println!("   📄 Formatted manuscript: {}", formatted_path.display());
+    println!("   📊 Total size: {} KB", content_buffer.len() / 1024);
+    println!("   📏 Publishing compliance: {:.1}%", formatted_manuscript.compliance_score * 100.0);
+    println!("   ⭐ Presentation quality: {:.1}%", formatted_manuscript.presentation_quality * 100.0);
+    println!("   🎭 Written in the style of: {}", selected_persona.writer_name);
+    println!("   🏛️  Literary tradition: {:?}", selected_persona.movement);
+    
+    Ok(())
+}
+
+async fn generate_persona_premise(
+    client: &AIClient,
+    model: &str,
+    genre: &Genre,
+    style: &WritingStyle,
+    persona: &crate::historical_writer_personas::HistoricalWriterPersona,
+) -> Result<String> {
+    let base_premise_prompt = format!(
+        "Generate a compelling story premise for a {} {} story that would be written by {}.\n\
+         Consider {}'s writing philosophy: {}\n\
+         Key techniques to incorporate: {:?}\n\
+         Literary movement: {:?}\n\
+         Era: {}\n\n\
+         Create a premise that captures {}'s distinctive voice, thematic concerns, and storytelling approach.\n\
+         The premise should be 2-3 sentences that establish the central conflict and protagonist in {}'s characteristic style.\n\
+         Premise:",
+        genre, style, persona.writer_name,
+        persona.writer_name, persona.writing_philosophy.core_beliefs.first().unwrap_or(&"Literary authenticity".to_string()),
+        persona.signature_techniques.iter().take(3).collect::<Vec<_>>(),
+        persona.movement,
+        persona.era.to_string(),
+        persona.writer_name,
+        persona.writer_name
+    );
+
+    let premise = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&base_premise_prompt, 150u32, 0.8).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &base_premise_prompt, 150i32, 0.8).await?
+        }
+    };
+
+    Ok(premise.trim().to_string())
+}
+
+fn create_persona_chapter_prompt(
+    premise: &str,
+    chapter_num: usize,
+    total_chapters: usize,
+    size: &BookSize,
+    genre: &Genre,
+    style: &WritingStyle,
+    persona: &crate::historical_writer_personas::HistoricalWriterPersona,
+) -> Result<String> {
+    let words_per_chapter = match size {
+        BookSize::ShortStory => 400,
+        BookSize::Short => 700,
+        BookSize::Medium => 900,
+        BookSize::Large => 1100,
+        BookSize::VeryLarge => 1500,
+        BookSize::Epic => 1300,
+        BookSize::Unlimited => 1800,
+    };
+
+    let chapter_context = if chapter_num == 1 {
+        format!("This is the opening chapter. In {}'s style, establish the protagonist and setting with rich detail and atmosphere. Use {} techniques to create an engaging hook.", persona.writer_name, persona.signature_techniques[0].to_string())
+    } else if chapter_num == total_chapters {
+        format!("This is the final chapter. Conclude in {}'s distinctive style, providing resolution that reflects their philosophical outlook: {}", persona.writer_name, persona.writing_philosophy.core_beliefs.first().unwrap_or(&"Authentic human truth".to_string()))
+    } else {
+        format!("This chapter should develop the narrative using {}'s characteristic approach. Employ {} techniques while maintaining the {} literary tradition.", persona.writer_name, persona.signature_techniques.iter().take(2).map(|t| t.to_string()).collect::<Vec<_>>().join(" and "), persona.movement)
+    };
+
+    Ok(format!(
+        "Write Chapter {} of a {} {} story in the distinctive style of {}.\n\n\
+         PREMISE: {}\n\n\
+         PERSONA GUIDANCE:\n\
+         - Writer: {} ({})\n\
+         - Philosophy: {}\n\
+         - Key Techniques: {:?}\n\
+         - Literary Movement: {:?}\n\
+         - Era Characteristics: {}\n\n\
+         CHAPTER CONTEXT: {}\n\n\
+         TARGET LENGTH: Approximately {} words\n\n\
+         STYLE REQUIREMENTS:\n\
+         - Emulate {}'s distinctive voice and narrative approach\n\
+         - Incorporate period-appropriate language and sensibilities\n\
+         - Use {} signature techniques throughout\n\
+         - Maintain thematic consistency with {} philosophical outlook\n\
+         - Reflect {} literary movement characteristics\n\n\
+         Write the chapter with authenticity to {}'s style while creating engaging, original content:",
+        chapter_num, genre, style, persona.writer_name,
+        premise,
+        persona.writer_name, persona.era.to_string(),
+        persona.writing_philosophy.core_beliefs.first().unwrap_or(&"Literary truth".to_string()),
+        persona.signature_techniques,
+        persona.movement,
+        persona.era.to_string(),
+        chapter_context,
+        words_per_chapter,
+        persona.writer_name,
+        persona.writer_name,
+        persona.writer_name,
+        persona.movement,
+        persona.writer_name
+    ))
 }

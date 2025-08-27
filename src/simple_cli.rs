@@ -97,6 +97,123 @@ pub enum Commands {
     
     #[command(about = "Start interactive mode")]
     Interactive,
+    
+    #[command(about = "Non-stop writing mode with automatic error recovery")]
+    NonStop {
+        #[arg(short, long, help = "Genre of the content")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(short = 'z', long, help = "Content size", default_value = "medium")]
+        size: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+        
+        #[arg(long, help = "Target number of sections", default_value = "10")]
+        sections: usize,
+        
+        #[arg(long, help = "Buffer size in MB", default_value = "50")]
+        buffer_size: usize,
+        
+        #[arg(long, help = "Enable auto-continue without user input")]
+        auto_continue: bool,
+    },
+    
+    #[command(about = "Enhanced intelligent writing with advanced AI systems")]
+    Enhanced {
+        #[arg(short, long, help = "Genre of the content")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(short = 'z', long, help = "Content size", default_value = "medium")]
+        size: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+        
+        #[arg(long, help = "Target number of chapters", default_value = "12")]
+        chapters: usize,
+        
+        #[arg(long, help = "Buffer size in MB", default_value = "100")]
+        buffer_size: usize,
+        
+        #[arg(long, help = "Enable auto-continue without user input")]
+        auto_continue: bool,
+        
+        #[arg(long, help = "Enable Chapter 3 interruption recovery mode")]
+        interruption_recovery: bool,
+    },
+    
+    #[command(about = "Write in the style of historical literary masters")]
+    Persona {
+        #[arg(short, long, help = "Genre of the content")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(short = 'z', long, help = "Content size", default_value = "medium")]
+        size: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+        
+        #[arg(long, help = "Target number of chapters", default_value = "8")]
+        chapters: usize,
+        
+        #[arg(long, help = "Historical writer to emulate")]
+        writer: Option<String>,
+        
+        #[arg(long, help = "Literary era to emulate", value_parser = ["classical", "medieval", "renaissance", "enlightenment", "romantic", "victorian", "modernist", "contemporary"])]
+        era: Option<String>,
+        
+        #[arg(long, help = "Enable auto-continue without user input")]
+        auto_continue: bool,
+        
+        #[arg(long, help = "Language enhancement level", value_parser = ["none", "subtle", "moderate", "strong", "authentic"], default_value = "moderate")]
+        language_enhancement: String,
+    },
 }
 
 // String to enum parsing functions
