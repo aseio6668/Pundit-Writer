@@ -14,6 +14,7 @@ use crate::temporal_engine::{TemporalEngine, ChapterTemporalContext};
 use crate::advanced_creativity_engine::{AdvancedCreativityEngine, CreativeChapterPlan};
 use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, ChapterGenerationContext, GenerationMetrics, InterruptionType};
 use crate::self_healing_writer::{SelfHealingWriter, GenerationPhase, PausePoint, RetryOption};
+use crate::nonstop_learning_mode::{NonstopLearningMode, setup_nonstop_learning_config};
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -169,14 +170,24 @@ pub async fn write_book(
         }
     }
     
-    // Get book details
-    let title: String = Input::new()
-        .with_prompt("📚 Book title")
-        .interact_text()?;
+    // Get book details (or use auto-generated ones in nonstop mode)
+    let title: String = if let Ok(auto_title) = std::env::var("AUTO_TITLE") {
+        println!("🤖 Using auto-generated title: {}", auto_title);
+        auto_title
+    } else {
+        Input::new()
+            .with_prompt("📚 Book title")
+            .interact_text()?
+    };
     
-    let premise: String = Input::new()
-        .with_prompt("💡 Book premise (brief description)")
-        .interact_text()?;
+    let premise: String = if let Ok(auto_description) = std::env::var("AUTO_DESCRIPTION") {
+        println!("🤖 Using auto-generated premise: {}", auto_description);
+        auto_description
+    } else {
+        Input::new()
+            .with_prompt("💡 Book premise (brief description)")
+            .interact_text()?
+    };
     
     let author = config.default_author.clone();
     
@@ -268,10 +279,18 @@ pub async fn write_book(
     println!("{}", book.outline);
     println!();
     
-    if !Confirm::new()
-        .with_prompt("Continue with this outline?")
-        .default(true)
-        .interact()? {
+    // Check if we're in nonstop learning mode with auto-approve enabled
+    let should_continue = if std::env::var("AUTO_APPROVE_OUTLINES").is_ok() {
+        println!("🤖 Auto-approving outline in nonstop learning mode...");
+        true
+    } else {
+        Confirm::new()
+            .with_prompt("Continue with this outline?")
+            .default(true)
+            .interact()?
+    };
+    
+    if !should_continue {
         println!("📝 You can manually edit the outline if needed.");
         book.outline = Input::new()
             .with_prompt("Enter revised outline")
@@ -695,14 +714,24 @@ async fn write_content(
         }
     }
     
-    // Get content details
-    let title: String = Input::new()
-        .with_prompt(&format!("📚 {} title", content_name))
-        .interact_text()?;
+    // Get content details (or use auto-generated ones in nonstop mode)
+    let title: String = if let Ok(auto_title) = std::env::var("AUTO_TITLE") {
+        println!("🤖 Using auto-generated title: {}", auto_title);
+        auto_title
+    } else {
+        Input::new()
+            .with_prompt(&format!("📚 {} title", content_name))
+            .interact_text()?
+    };
     
-    let premise: String = Input::new()
-        .with_prompt(&format!("💡 {} premise (brief description)", content_name))
-        .interact_text()?;
+    let premise: String = if let Ok(auto_description) = std::env::var("AUTO_DESCRIPTION") {
+        println!("🤖 Using auto-generated premise: {}", auto_description);
+        auto_description
+    } else {
+        Input::new()
+            .with_prompt(&format!("💡 {} premise (brief description)", content_name))
+            .interact_text()?
+    };
     
     let author = config.default_author.clone();
     
@@ -823,10 +852,18 @@ async fn write_content(
     println!("{}", content.outline);
     println!();
     
-    if !Confirm::new()
-        .with_prompt("Continue with this outline?")
-        .default(true)
-        .interact()? {
+    // Check if we're in nonstop learning mode with auto-approve enabled
+    let should_continue = if std::env::var("AUTO_APPROVE_OUTLINES").is_ok() {
+        println!("🤖 Auto-approving outline in nonstop learning mode...");
+        true
+    } else {
+        Confirm::new()
+            .with_prompt("Continue with this outline?")
+            .default(true)
+            .interact()?
+    };
+    
+    if !should_continue {
         println!("📝 You can manually edit the outline if needed.");
         content.outline = Input::new()
             .with_prompt("Enter revised outline")
@@ -1008,13 +1045,16 @@ async fn write_next_section(
             }
         };
         
-        // Validate the AI output before processing
-        if is_ai_output_corrupted(&raw_result) {
+        // Pre-clean the content to remove minor issues before validation
+        let cleaned_result = auto_clean_content(&raw_result);
+        
+        // Validate the AI output after initial cleaning
+        if is_ai_output_corrupted(&cleaned_result) {
             return Err(anyhow!("AI generated corrupted or contaminated output - content rejected: {}", 
-                truncate_for_error(&raw_result, 100)));
+                truncate_for_error(&cleaned_result, 100)));
         }
         
-        raw_result
+        cleaned_result
     };
     
     // Clean the generated content to remove any chapter number references and AI meta-commentary
@@ -1287,6 +1327,42 @@ fn clean_title_for_context(title: &str) -> String {
     }
     
     cleaned.trim().to_string()
+}
+
+// Automatic content cleaning to remove minor issues before validation
+fn auto_clean_content(content: &str) -> String {
+    let mut cleaned = content.to_string();
+    
+    // Remove common AI artifacts and minor formatting issues
+    cleaned = cleaned
+        // Remove excessive whitespace
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    
+    // Remove trailing/leading whitespace
+    cleaned = cleaned.trim().to_string();
+    
+    // Fix common formatting issues
+    cleaned = cleaned
+        // Remove stray quotes at start/end that sometimes appear
+        .strip_prefix("\"").unwrap_or(&cleaned).to_string();
+    cleaned = cleaned
+        .strip_suffix("\"").unwrap_or(&cleaned).to_string();
+    
+    // Remove any stray markdown that might interfere
+    cleaned = cleaned.replace("```", "");
+    
+    // Remove empty lines at start and end
+    while cleaned.starts_with("\n") {
+        cleaned = cleaned.strip_prefix("\n").unwrap_or(&cleaned).to_string();
+    }
+    while cleaned.ends_with("\n\n\n") {
+        cleaned = cleaned.strip_suffix("\n").unwrap_or(&cleaned).to_string();
+    }
+    
+    cleaned
 }
 
 fn clean_generated_content(content: &str, expected_section_number: usize, section_type: &SectionType) -> String {
@@ -1623,6 +1699,7 @@ pub async fn interactive_mode() -> Result<()> {
                 
                 // === SPECIAL MODES ===
                 "✨ Freeform Writing - Describe what you want with files/context",
+                "🤖 Nonstop Learning Mode - Autonomous work generation with learning",
                 "❌ Exit",
             ];
             
@@ -1725,6 +1802,10 @@ pub async fn interactive_mode() -> Result<()> {
                 18 => {
                     // Freeform writing mode
                     interactive_freeform_writing().await
+                },
+                19 => {
+                    // Nonstop learning mode
+                    interactive_nonstop_learning_mode().await
                 },
                 _ => {
                     println!("Invalid selection");
@@ -10928,61 +11009,61 @@ fn is_prompt_corrupted(prompt: &str) -> bool {
 
 fn is_ai_output_corrupted(output: &str) -> bool {
     let output_lower = output.to_lowercase();
+    let trimmed_output = output.trim();
     
-    // Check for signs of corrupted AI output
-    if output.len() < 10 {
+    // Check for truly problematic content length
+    if trimmed_output.len() < 10 {
         return true; // Too short to be valid content
     }
     
-    // Check for training data contamination patterns
-    let contamination_patterns = [
-        "context:",
-        "question:",
-        "answer:",
+    // Only flag truly problematic patterns that indicate AI training contamination
+    // More lenient approach - focus on obvious contamination markers
+    let severe_contamination_patterns = [
         "user:",
         "assistant:",
-        "questionnaire",
-        "questioneering",
-        "contexting",
-        "problem textiles",
-        "questionary",
-        "academic writing: ishikaga",
-        "context and solutions",
+        "questionnaire:",
         "translate all this",
-        "input=yoga",
+        "input=",
         "user=user:",
-        "$$",
         "http://",
         "www.",
-        ".com",
-        ".org",
-        "because ihops",
-        "atlasica",
-        "ravennaise",
+        "because ihops", // Known AI training artifact
+        "atlasica",     // Known AI training artifact
+        "ravennaise",   // Known AI training artifact
         "ninejustice.org",
-        "growthshoe",
+        "growthshoe",   // Known AI training artifact
     ];
     
-    let contamination_count = contamination_patterns.iter()
+    // Check for obvious training data contamination (require exact matches)
+    let contamination_count = severe_contamination_patterns.iter()
         .filter(|pattern| output_lower.contains(*pattern))
         .count();
     
-    if contamination_count >= 2 {
-        return true; // Multiple contamination patterns detected
-    }
-    
-    // Check for fragments of training examples
-    if (output_lower.contains("question") && output_lower.contains("answer")) ||
-       (output_lower.contains("context") && output_lower.contains("documentation")) ||
-       (output_lower.contains("user") && output_lower.contains("ai")) ||
-       output_lower.contains("training") && output_lower.contains("model") {
+    if contamination_count >= 1 { // Even one of these is a problem
         return true;
     }
     
-    // Check for broken text patterns
-    if output.matches("{").count() != output.matches("}").count() ||
-       output.matches("[").count() != output.matches("]").count() ||
-       output.contains("$") && output.matches("$").count() > 3 {
+    // Check for clear fragments of training examples (more specific)
+    if (output_lower.contains("question:") && output_lower.contains("answer:")) ||
+       (output_lower.contains("user:") && output_lower.contains("assistant:")) ||
+       (output_lower.contains("context:") && output_lower.contains("documentation:")) {
+        return true;
+    }
+    
+    // Check for severely broken text patterns (more lenient)
+    if output.matches("{").count().abs_diff(output.matches("}").count()) > 2 ||
+       output.matches("[").count().abs_diff(output.matches("]").count()) > 2 ||
+       output.contains("$$$$") || // Multiple dollar signs in a row
+       output.matches("$").count() > 10 { // Excessive dollar signs
+        return true;
+    }
+    
+    // Check for output that's just metadata or error messages
+    if output_lower.starts_with("error:") ||
+       output_lower.starts_with("warning:") ||
+       output_lower.contains("i cannot") ||
+       output_lower.contains("i can't") ||
+       output_lower.contains("as an ai") {
         return true;
     }
     
@@ -12269,4 +12350,48 @@ fn create_persona_chapter_prompt(
         persona.movement,
         persona.writer_name
     ))
+}
+
+// Nonstop Learning Mode - Autonomous work generation with learning
+async fn interactive_nonstop_learning_mode() -> Result<()> {
+    println!("{}", console::style("🤖 Nonstop Learning Mode").bold().cyan());
+    println!("═══════════════════════════════════════");
+    println!();
+    println!("This mode will continuously generate works to learn and improve.");
+    println!("Pundit will create random works, learn from errors, and adapt its approach.");
+    println!("Perfect for training the AI and addressing issues like Chapter 1 regeneration.");
+    println!();
+
+    // Setup configuration
+    let config = setup_nonstop_learning_config().await?;
+    
+    // Confirm start
+    let start_confirmed = Confirm::new()
+        .with_prompt("Start nonstop learning mode with these settings?")
+        .default(true)
+        .interact()?;
+
+    if !start_confirmed {
+        println!("🚫 Nonstop learning mode cancelled.");
+        return Ok(());
+    }
+
+    // Create and run the learning mode
+    let mut learning_mode = NonstopLearningMode::new(config);
+    
+    // TODO: Initialize with actual learning systems once they're properly integrated
+    // For now we'll run without the advanced learning systems to test basic functionality
+    
+    println!("\n🚀 Starting nonstop learning mode...");
+    println!("📁 Generated works will be saved to: generated_works/");
+    
+    // Create output directory if it doesn't exist
+    std::fs::create_dir_all("generated_works").unwrap_or_else(|_| {
+        println!("⚠️  Could not create generated_works directory. Using current directory.");
+    });
+
+    learning_mode.run().await?;
+
+    println!("\n✅ Nonstop learning mode completed successfully!");
+    Ok(())
 }

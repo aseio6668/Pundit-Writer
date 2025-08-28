@@ -29,6 +29,7 @@ mod advanced_learning_system;
 mod cognitive_writing_engine;
 mod neural_creativity_enhancer;
 mod master_intelligence_system;
+mod nonstop_learning_mode;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 

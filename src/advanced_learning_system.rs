@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use std::fs;
+use std::path::PathBuf;
 use crate::cli_types::{Genre, WritingStyle, BookSize};
 use crate::self_healing_writer::GenerationPhase;
 use crate::adaptive_learning_engine::{UserFeedback, ContentIssue};
+use crate::config::get_learning_data_dir;
+use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailedApproach {
@@ -963,6 +967,78 @@ impl AdvancedLearningSystem {
     pub fn identify_risk_factors(&self, _analysis: &str, _genre: &crate::cli_types::Genre) -> Vec<String> {
         vec!["Risk factor placeholder".to_string()]
     }
+
+    // Learning data persistence methods
+    pub fn save_to_disk(&self) -> Result<()> {
+        let learning_dir = get_learning_data_dir()?;
+        
+        // Save writing memory
+        let memory_path = learning_dir.join("writing_memory.json");
+        let memory_json = serde_json::to_string_pretty(&self.writing_memory)?;
+        fs::write(memory_path, memory_json)?;
+        
+        // Save learning configuration
+        let config_path = learning_dir.join("learning_config.json");
+        let config = LearningSystemConfig {
+            learning_acceleration: self.learning_acceleration,
+            pattern_recognition_threshold: self.pattern_recognition_threshold,
+            creativity_exploration_rate: self.creativity_exploration_rate,
+            knowledge_consolidation_period: self.knowledge_consolidation_period,
+            cross_domain_learning: self.cross_domain_learning,
+            last_saved: Utc::now(),
+        };
+        let config_json = serde_json::to_string_pretty(&config)?;
+        fs::write(config_path, config_json)?;
+        
+        println!("💾 Learning data saved to: {:?}", learning_dir);
+        Ok(())
+    }
+    
+    pub fn load_from_disk(&mut self) -> Result<()> {
+        let learning_dir = get_learning_data_dir()?;
+        
+        // Load writing memory if exists
+        let memory_path = learning_dir.join("writing_memory.json");
+        if memory_path.exists() {
+            let memory_json = fs::read_to_string(memory_path)?;
+            self.writing_memory = serde_json::from_str(&memory_json)?;
+            println!("📖 Loaded writing memory with {} sessions", 
+                self.writing_memory.session_memories.len());
+        }
+        
+        // Load learning configuration if exists
+        let config_path = learning_dir.join("learning_config.json");
+        if config_path.exists() {
+            let config_json = fs::read_to_string(config_path)?;
+            let config: LearningSystemConfig = serde_json::from_str(&config_json)?;
+            
+            self.learning_acceleration = config.learning_acceleration;
+            self.pattern_recognition_threshold = config.pattern_recognition_threshold;
+            self.creativity_exploration_rate = config.creativity_exploration_rate;
+            self.knowledge_consolidation_period = config.knowledge_consolidation_period;
+            self.cross_domain_learning = config.cross_domain_learning;
+            
+            println!("⚙️  Loaded learning configuration (last saved: {})", 
+                config.last_saved.format("%Y-%m-%d %H:%M:%S UTC"));
+        }
+        
+        Ok(())
+    }
+    
+    pub fn auto_save_session(&self, session_id: &str) -> Result<()> {
+        let learning_dir = get_learning_data_dir()?;
+        let sessions_dir = learning_dir.join("sessions");
+        fs::create_dir_all(&sessions_dir)?;
+        
+        if let Some(session) = self.writing_memory.session_memories.get(session_id) {
+            let session_path = sessions_dir.join(format!("{}.json", session_id));
+            let session_json = serde_json::to_string_pretty(session)?;
+            fs::write(session_path, session_json)?;
+            println!("💾 Session {} auto-saved", session_id);
+        }
+        
+        Ok(())
+    }
 }
 
 // Supporting structures and implementations continue...
@@ -999,6 +1075,16 @@ pub struct LearningInsights {
     pub skill_improvements: Vec<String>,
     pub creative_evolution: Vec<String>,
     pub recommendation_updates: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearningSystemConfig {
+    pub learning_acceleration: f32,
+    pub pattern_recognition_threshold: f32,
+    pub creativity_exploration_rate: f32,
+    pub knowledge_consolidation_period: u32,
+    pub cross_domain_learning: bool,
+    pub last_saved: DateTime<Utc>,
 }
 
 // Additional supporting structures would be defined here...

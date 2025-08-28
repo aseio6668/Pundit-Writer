@@ -119,6 +119,24 @@ pub fn get_books_dir() -> Result<PathBuf> {
     Ok(books_dir)
 }
 
+pub fn get_learning_data_dir() -> Result<PathBuf> {
+    if let Some(project_dirs) = ProjectDirs::from("com", "pundit", "pundit-writer") {
+        let learning_dir = project_dirs.data_dir().join("learning");
+        if !learning_dir.exists() {
+            fs::create_dir_all(&learning_dir)
+                .map_err(|e| anyhow!("Failed to create learning data directory: {}", e))?;
+        }
+        Ok(learning_dir)
+    } else {
+        let learning_dir = PathBuf::from("./learning_data");
+        if !learning_dir.exists() {
+            fs::create_dir_all(&learning_dir)
+                .map_err(|e| anyhow!("Failed to create learning data directory: {}", e))?;
+        }
+        Ok(learning_dir)
+    }
+}
+
 pub fn save_book_state(content: &crate::content::Content) -> Result<()> {
     let books_dir = get_books_dir()?;
     let content_file = books_dir.join(format!("{}.json", content.id));
