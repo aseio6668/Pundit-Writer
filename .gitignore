@@ -1,3 +1,5 @@
 /target/
 /.git/
 /.claude/
+/generated_works/
+/.misc/
