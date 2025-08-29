@@ -400,6 +400,21 @@ async fn main() -> Result<()> {
                 println!("💾 Content saved to: {:?}", output_path);
             }
         },
+        
+        Commands::Encyclopedia { topic, scope, entries, output, model, api_key, local, ollama_url } => {
+            let output_path = output.map(|p| p.to_string_lossy().to_string());
+            
+            crate::writer::write_encyclopedia(
+                topic,
+                scope,
+                entries,
+                output_path,
+                model,
+                api_key,
+                local,
+                ollama_url,
+            ).await?;
+        },
     }
     
     Ok(())

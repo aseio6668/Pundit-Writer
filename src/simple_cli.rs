@@ -316,6 +316,33 @@ pub enum Commands {
         #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
         ollama_url: String,
     },
+    
+    #[command(about = "Encyclopedia - Create comprehensive knowledge references")]
+    Encyclopedia {
+        #[arg(short, long, help = "Main topic or subject area")]
+        topic: String,
+        
+        #[arg(short, long, help = "Scope of coverage (comprehensive, specialized, concise)", default_value = "comprehensive")]
+        scope: String,
+        
+        #[arg(short, long, help = "Number of encyclopedia entries", default_value = "20")]
+        entries: usize,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<std::path::PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "Hugging Face API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama instead of HuggingFace API")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+    },
 }
 
 // String to enum parsing functions

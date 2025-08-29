@@ -11,6 +11,7 @@ A sophisticated cross-platform CLI tool for generating professional content usin
 - **📺 TV Scripts**: Television episodes for sitcoms, dramas, mini-series, and anthologies
 - **🎧 Audio Scripts**: Podcast scripts, audio dramas, radio plays, and documentaries
 - **🎮 Game Scripts**: Interactive narratives with branching dialogue for video games
+- **🏛️ Encyclopedias**: Comprehensive knowledge references with structured entries
 - **📄 Professional Documents**: Business plans, technical manuals, reports, proposals, and more
 
 ### 🧠 **Advanced AI Writing Systems**
@@ -300,6 +301,18 @@ pundit game-script --genre rpg --style dramatic --characters 10 --local
 ```bash
 # Business documents
 pundit document --doc-type business-plan --style formal --length comprehensive --local
+```
+
+#### 🏛️ **Encyclopedias**
+```bash
+# Comprehensive encyclopedia
+pundit encyclopedia --topic "Ancient Rome" --scope comprehensive --entries 25 --local
+
+# Specialized technical encyclopedia
+pundit encyclopedia --topic "Machine Learning" --scope specialized --entries 15 --local
+
+# Concise reference guide
+pundit encyclopedia --topic "Chess Strategy" --scope concise --entries 10 --local
 ```
 
 #### 🧠 **Advanced AI Commands**
@@ -602,6 +615,10 @@ Content is saved in multiple formats based on type:
 - **Text File**: `gamescript_Title_20240816_143022.txt`
 - **Markdown**: `gamescript_Title_20240816_143022.md`
 
+### 🏛️ **Encyclopedias**
+- **Text File**: `encyclopedia_Title_20240816_143022.txt`
+- **Markdown**: `encyclopedia_Title_20240816_143022.md`
+
 ### 📄 **Professional Documents**
 - **Text File**: `document_Title_20240816_143022.txt`
 - **Markdown**: `document_Title_20240816_143022.md`
@@ -641,6 +658,7 @@ For simpler use cases or when advanced features are disabled:
    - **Stage Plays**: Character dialogue, stage directions, act divisions
    - **Audio Scripts**: Sound effects, music cues, narrator instructions
    - **Game Scripts**: Branching dialogue, choice options, conditional logic
+   - **Encyclopedias**: Structured entries with topics, definitions, history, significance
    - **Documents**: Professional structure, headings, bullet points
 5. **Context Management**: Maintains consistency across all sections/chapters
 6. **Natural Conclusion**: Determines appropriate ending points based on content type and target length
@@ -780,6 +798,11 @@ pundit game-script --genre rpg --style creative --characters 12 --local
 ### 📄 **Write a Technical Manual**
 ```bash
 pundit document --doc-type technical-manual --style technical --length standard --local
+```
+
+### 🏛️ **Create a Science Encyclopedia**
+```bash
+pundit encyclopedia --topic "Physics Concepts" --scope comprehensive --entries 30 --local
 ```
 
 ### 🎨 **Interactive Content Creation**

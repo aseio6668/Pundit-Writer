@@ -31,6 +31,7 @@ pub enum ContentType {
     Dictionary,
     EducationalLesson,
     ChildrensBook,
+    Encyclopedia,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -382,6 +383,7 @@ impl Content {
             ContentType::Dictionary => "Dictionary",
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
+            ContentType::Encyclopedia => "Encyclopedia",
         };
         
         let mut context = format!(
@@ -420,6 +422,7 @@ impl Content {
                 ContentType::Dictionary => "entries",
                 ContentType::EducationalLesson => "lessons",
                 ContentType::ChildrensBook => "chapters",
+                ContentType::Encyclopedia => "entries",
             };
             
             context.push_str(&format!("Previous {}:\n", section_name));
@@ -489,6 +492,7 @@ impl Content {
                 ContentType::Dictionary => "Entry",
                 ContentType::EducationalLesson => "Lesson",
                 ContentType::ChildrensBook => "Chapter",
+                ContentType::Encyclopedia => "Entry",
             };
             
             context.push_str(&format!("{} {}: {}\n", section_type, section.number, section.title));
@@ -534,6 +538,7 @@ impl Content {
             ContentType::Dictionary => "Dictionary",
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
+            ContentType::Encyclopedia => "Encyclopedia",
         };
         
         let mut content_text = format!(
@@ -569,6 +574,7 @@ impl Content {
                 ContentType::Dictionary => self.format_dictionary_entry(&section.content),
                 ContentType::EducationalLesson => self.format_educational_content(&section.content),
                 ContentType::ChildrensBook => self.format_childrens_content(&section.content),
+                ContentType::Encyclopedia => self.format_encyclopedia_entry(&section.content),
                 _ => section.content.clone(),
             };
             
@@ -688,6 +694,32 @@ impl Content {
             .collect()
     }
     
+    pub fn format_encyclopedia_entry(&self, content: &str) -> String {
+        // Encyclopedia entry formatting with structured information
+        content.lines()
+            .map(|line| {
+                let line = line.trim();
+                if line.is_empty() {
+                    String::new()
+                } else if line.starts_with("TOPIC:") {
+                    format!("# {}\n\n", line.strip_prefix("TOPIC:").unwrap_or(line).trim())
+                } else if line.starts_with("DEFINITION:") {
+                    format!("**Definition:** {}\n\n", line.strip_prefix("DEFINITION:").unwrap_or(line).trim())
+                } else if line.starts_with("HISTORY:") {
+                    format!("## History\n{}\n\n", line.strip_prefix("HISTORY:").unwrap_or(line).trim())
+                } else if line.starts_with("SIGNIFICANCE:") {
+                    format!("## Significance\n{}\n\n", line.strip_prefix("SIGNIFICANCE:").unwrap_or(line).trim())
+                } else if line.starts_with("SEE_ALSO:") {
+                    format!("**See Also:** {}\n\n", line.strip_prefix("SEE_ALSO:").unwrap_or(line).trim())
+                } else if line.starts_with("CATEGORIES:") {
+                    format!("**Categories:** {}\n\n", line.strip_prefix("CATEGORIES:").unwrap_or(line).trim())
+                } else {
+                    format!("{}\n", line)
+                }
+            })
+            .collect()
+    }
+    
     pub fn format_educational_content(&self, content: &str) -> String {
         // Educational lesson formatting with objectives
         content.lines()
@@ -754,6 +786,7 @@ impl Content {
             ContentType::Dictionary => "Dictionary",
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
+            ContentType::Encyclopedia => "Encyclopedia",
         };
         
         let mut markdown = format!(
@@ -1222,6 +1255,7 @@ impl std::fmt::Display for ContentType {
             ContentType::Dictionary => "Dictionary",
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
+            ContentType::Encyclopedia => "Encyclopedia",
         };
         write!(f, "{}", s)
     }

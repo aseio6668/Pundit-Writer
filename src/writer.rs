@@ -7540,6 +7540,222 @@ async fn write_dictionary_section(
     Ok(())
 }
 
+// Encyclopedia creation with structured knowledge entries
+pub async fn write_encyclopedia(
+    topic: String,
+    scope: String, // "comprehensive", "specialized", or "concise"  
+    entries: usize,
+    output: Option<String>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+) -> Result<()> {
+    let term = Term::stdout();
+    let _ = term.write_line(&console::style("🏛️  Encyclopedia Writer").bold().to_string());
+    let _ = term.write_line(&format!("Topic: {}", topic));
+    let _ = term.write_line(&format!("Scope: {}", scope));
+    let _ = term.write_line(&format!("Total Entries: {}", entries));
+    
+    // Create client
+    let client = if use_local {
+        AIClient::Ollama(OllamaClient::new(ollama_url))
+    } else {
+        match api_key {
+            Some(key) => AIClient::HuggingFace(HuggingFaceClient::new(key)),
+            None => {
+                return Err(anyhow!("No API key provided and local model not enabled"));
+            }
+        }
+    };
+    
+    // Create encyclopedia content
+    let mut content = Content::new(
+        format!("Encyclopedia of {}", topic),
+        "Pundit AI".to_string(),
+        topic.clone(),
+        "encyclopedic".to_string(),
+        format!("Comprehensive {} covering key topics and concepts", topic.to_lowercase()),
+        scope.clone(),
+        Some(entries * 500), // ~500 words per entry
+        entries,
+        model.clone(),
+    );
+    
+    content.content_type = crate::content::ContentType::Encyclopedia;
+    
+    // Generate encyclopedia outline
+    let outline_prompt = format!(
+        "Create an encyclopedia outline for '{}' with exactly {} entries. 
+        
+        Format as a numbered list of topics that should be covered.
+        Scope: {}
+        
+        Each entry should be a distinct, important topic that deserves its own encyclopedia entry.
+        
+        Example format:
+        1. Main Topic Overview
+        2. Historical Development
+        3. Key Principles
+        4. Notable Examples
+        5. Modern Applications
+        
+        Generate {} distinct encyclopedia topics:",
+        topic, entries, scope, entries
+    );
+    
+    let outline = match &client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&outline_prompt, 800, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(&model, &outline_prompt, 800, 0.7).await?
+        }
+    };
+    
+    content.outline = outline.clone();
+    
+    // Parse topics from outline
+    let topics: Vec<String> = outline
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() { return None; }
+            
+            // Remove numbering (1. 2. etc.) and clean up
+            if let Some(topic) = line.split('.').nth(1) {
+                Some(topic.trim().to_string())
+            } else if !line.chars().next().unwrap_or(' ').is_ascii_digit() {
+                Some(line.to_string())
+            } else {
+                None
+            }
+        })
+        .take(entries)
+        .collect();
+    
+    if topics.is_empty() {
+        return Err(anyhow!("Failed to generate encyclopedia topics"));
+    }
+    
+    // Progress bar
+    let progress_bar = ProgressBar::new(entries as u64);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} entries ({msg})")
+            .unwrap()
+            .progress_chars("██▓▒░")
+    );
+    
+    // Generate each encyclopedia entry
+    for (index, topic_title) in topics.iter().enumerate() {
+        let section_num = index + 1;
+        progress_bar.set_message(format!("Writing: {}", topic_title));
+        
+        if let Err(e) = write_encyclopedia_entry(&client, &model, &mut content, section_num, topic_title, &topic, &scope, &progress_bar).await {
+            eprintln!("❌ Error writing entry {}: {}", section_num, e);
+            if !Confirm::new()
+                .with_prompt("Continue with next entry?")
+                .default(true)
+                .interact()? {
+                break;
+            }
+        }
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Encyclopedia creation complete!");
+    
+    // Save the content
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let safe_title = content.title.chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { '_' })
+        .collect::<String>()
+        .replace(' ', "_");
+        
+    let output_dir = output.unwrap_or_else(|| "./".to_string());
+    let base_filename = format!("encyclopedia_{}_{}", safe_title, timestamp);
+    
+    // Save in multiple formats
+    let txt_path = format!("{}/{}.txt", output_dir, base_filename);
+    let md_path = format!("{}/{}.md", output_dir, base_filename);
+    
+    content.save_to_file(&txt_path)?;
+    content.save_markdown(&md_path)?;
+    
+    println!("\n✅ Encyclopedia completed successfully!");
+    println!("📄 Text file: {}", txt_path);
+    println!("📝 Markdown: {}", md_path);
+    println!("📊 Total entries: {}", content.sections.len());
+    println!("📝 Total words: {}", content.metadata.current_word_count);
+    
+    Ok(())
+}
+
+async fn write_encyclopedia_entry(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    entry_num: usize,
+    topic_title: &str,
+    main_topic: &str,
+    scope: &str,
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let target_words = match scope {
+        "comprehensive" => 800,
+        "specialized" => 600,
+        "concise" => 400,
+        _ => 500,
+    };
+    
+    let prompt = format!(
+        "Write a comprehensive encyclopedia entry about: {}
+
+        This is entry {} in an encyclopedia about {}.
+        
+        Structure the entry with the following format:
+        TOPIC: {}
+        DEFINITION: [Clear, concise definition]
+        HISTORY: [Historical background and development]
+        SIGNIFICANCE: [Why this topic is important]  
+        SEE_ALSO: [Related topics in the encyclopedia]
+        CATEGORIES: [Subject categories this belongs to]
+        
+        Make it exactly {} words and ensure it reads like a proper encyclopedia entry.
+        Be factual, informative, and well-structured.
+        
+        The entry should be comprehensive yet accessible to general readers.",
+        topic_title, entry_num, main_topic, topic_title, target_words
+    );
+    
+    let entry_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, (target_words as f32 * 1.3) as u32, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, (target_words as f32 * 1.3) as i32, 0.7).await?
+        }
+    };
+    
+    // Create the section
+    let section = crate::content::Section::new(
+        entry_num,
+        topic_title.to_string(),
+        format!("Encyclopedia entry: {}", topic_title),
+    );
+    
+    // Add content to the section
+    let mut new_section = section;
+    new_section.set_content(entry_content);
+    
+    content.add_section(new_section);
+    content.updated_at = chrono::Utc::now();
+    
+    Ok(())
+}
+
 async fn write_educational_section(
     client: &AIClient,
     model: &str,
