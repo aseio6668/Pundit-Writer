@@ -342,9 +342,15 @@ async fn main() -> Result<()> {
             
             // Create minimal content context for the writing
             let content = crate::content::Content::new(
-                format!("{:?}", parsed_genre),
-                format!("{:?}", parsed_style),
-                crate::cli_types::BookSize::Medium
+                "Soul Memory Test".to_string(), // title
+                "Pundit AI".to_string(), // author
+                format!("{:?}", parsed_genre), // genre
+                format!("{:?}", parsed_style), // writing_style
+                "AI soul memory exploration".to_string(), // premise
+                "Medium".to_string(), // target_size
+                Some(1000), // target_word_count
+                3, // target_chapters
+                model.clone(), // model
             );
             
             let result = engine.write_with_soul(

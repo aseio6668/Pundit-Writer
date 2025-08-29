@@ -905,7 +905,7 @@ async fn write_content(
     // Write sections progressively
     let mut section_count = 1;
     while content.should_continue() && section_count <= content.metadata.target_sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_count, section_type, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_count, section_type, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_count, e);
             
             if Confirm::new()
@@ -1097,7 +1097,7 @@ async fn write_next_section(
         match enhanced.generate_enhanced_content(
             client, 
             model, 
-            &mut content, 
+            content, 
             section_number, 
             &section_type, 
             &clean_prompt, 
@@ -3331,7 +3331,7 @@ pub async fn continue_content(
             content.get_clean_context()
         );
         
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, section_type, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, section_type, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next section?")
@@ -3571,7 +3571,7 @@ pub async fn write_technical_doc(
     // Write sections
     println!("\n📝 Writing technical documentation...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next section?")
@@ -3692,7 +3692,7 @@ pub async fn write_research_doc(
     // Write sections
     println!("\n📝 Writing research document...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next section?")
@@ -3986,7 +3986,7 @@ pub async fn write_interactive_fiction(
     // Write chapters
     println!("\n📝 Writing interactive fiction...");
     for chapter_num in 1..=chapter_count {
-        if let Err(e) = write_next_section(&client, &model, &mut content, chapter_num, SectionType::Chapter, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, chapter_num, SectionType::Chapter, &progress_bar, None).await {
             eprintln!("❌ Error writing chapter {}: {}", chapter_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next chapter?")
@@ -4106,7 +4106,7 @@ pub async fn write_personal_writing(
     // Write entries
     println!("\n📝 Writing personal entries...");
     for entry_num in 1..=entry_count {
-        if let Err(e) = write_next_section(&client, &model, &mut content, entry_num, SectionType::Section, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, entry_num, SectionType::Section, &progress_bar, None).await {
             eprintln!("❌ Error writing entry {}: {}", entry_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next entry?")
@@ -4279,7 +4279,7 @@ pub async fn write_marketing_content(
     // Write sections
     println!("\n📝 Writing marketing content...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next section?")
@@ -4455,7 +4455,7 @@ pub async fn write_blog_content(
     // Write sections
     println!("\n📝 Writing blog content...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
             if !Confirm::new()
                 .with_prompt("Continue with next section?")

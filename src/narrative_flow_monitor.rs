@@ -30,10 +30,10 @@ pub struct ContentAnalysis {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfusionIndicator {
-    indicator_type: ConfusionType,
-    severity: f32,
-    description: String,
-    text_sample: String,
+    pub indicator_type: ConfusionType,
+    pub severity: f32,
+    pub description: String,
+    pub text_sample: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,10 +82,10 @@ pub struct NarrativePivot {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedElement {
-    element_type: ElementType,
-    content: String,
-    importance_score: f32,
-    reuse_potential: f32,
+    pub element_type: ElementType,
+    pub content: String,
+    pub importance_score: f32,
+    pub reuse_potential: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ pub enum ElementType {
     SymbolicElement,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PivotStrategy {
     CompleteShift,          // Completely new direction
     ElementReuse,           // Use extracted elements in new context
@@ -113,12 +113,13 @@ pub enum PivotStrategy {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowDecision {
-    should_pivot: bool,
-    confidence: f32,
-    detected_issues: Vec<ConfusionIndicator>,
-    recommended_strategy: Option<PivotStrategy>,
-    extracted_elements: Vec<ExtractedElement>,
-    pivot_prompt: Option<String>,
+    pub should_pivot: bool,
+    pub confidence: f32,
+    pub detected_issues: Vec<ConfusionIndicator>,
+    pub recommended_strategy: Option<PivotStrategy>,
+    pub extracted_elements: Vec<ExtractedElement>,
+    pub pivot_prompt: Option<String>,
+    pub explanation: String,
 }
 
 impl Default for NarrativeFlowMonitor {
@@ -164,9 +165,10 @@ impl NarrativeFlowMonitor {
                 should_pivot: true,
                 confidence: self.calculate_pivot_confidence(&analysis),
                 detected_issues: analysis.confusion_indicators,
-                recommended_strategy: Some(pivot_strategy),
+                recommended_strategy: Some(pivot_strategy.clone()),
                 extracted_elements,
                 pivot_prompt,
+                explanation: format!("Flow intervention needed: {:?}", pivot_strategy),
             })
         } else {
             Ok(FlowDecision {
@@ -176,6 +178,7 @@ impl NarrativeFlowMonitor {
                 recommended_strategy: None,
                 extracted_elements: Vec::new(),
                 pivot_prompt: None,
+                explanation: "Flow is acceptable, no intervention needed".to_string(),
             })
         }
     }

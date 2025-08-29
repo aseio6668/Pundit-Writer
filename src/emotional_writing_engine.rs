@@ -135,7 +135,7 @@ impl EmotionalWritingEngine {
         Ok(EmotionalWritingResult {
             final_content: generated_content,
             writer_state_after: self.metaphorical_writer.describe_current_state(),
-            emotional_journey: break_experience.insights_gained,
+            emotional_journey: break_experience.insights_gained.clone(),
             interventions_taken: vec![format!("Pre-writing intervention: {:?}", intervention)],
             breaks_taken: vec![break_experience],
             creative_insights: vec!["Sometimes the best writing comes after stepping away first".to_string()],
@@ -279,13 +279,11 @@ impl EmotionalWritingEngine {
     }
 
     async fn generate_content(&self, prompt: &str, model: &str, max_tokens: Option<usize>) -> Result<String> {
-        self.ollama_client.generate(
+        self.ollama_client.generate_text(
             model,
             prompt,
-            max_tokens.unwrap_or(1000),
+            max_tokens.unwrap_or(1000) as i32,
             0.8,
-            Some(100),
-            Some(0.9),
         ).await
     }
 

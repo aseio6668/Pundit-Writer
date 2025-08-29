@@ -57,10 +57,10 @@ impl FlowAwareWriter {
         // Content needs intervention
         println!("🔄 Flow intervention triggered: {}", evaluation.explanation);
         
-        if evaluation.confidence > 0.8 {
+        if evaluation.confidence_level > 0.8 {
             // High confidence - do full intervention
             return self.perform_full_intervention(evaluation, model, genre, style, current_content, max_tokens).await;
-        } else if evaluation.confidence > 0.5 {
+        } else if evaluation.confidence_level > 0.5 {
             // Medium confidence - try gentle nudge first
             return self.try_gentle_nudge(&initial_response, model, genre, style, max_tokens).await;
         } else {
@@ -99,7 +99,7 @@ impl FlowAwareWriter {
             if !post_check.should_intervene {
                 println!("✅ Intervention successful - flow improved");
                 return Ok(intervened_content);
-            } else if post_check.confidence < evaluation.confidence_level {
+            } else if post_check.confidence_level < evaluation.confidence_level {
                 println!("🔄 Intervention partially successful - reduced complexity");
                 return Ok(intervened_content);
             } else {
@@ -175,13 +175,11 @@ impl FlowAwareWriter {
 
     async fn generate_content(&self, prompt: &str, model: &str, max_tokens: Option<usize>) -> Result<String> {
         // Use existing Ollama client to generate content
-        self.ollama_client.generate(
+        self.ollama_client.generate_text(
             model,
             prompt,
-            max_tokens.unwrap_or(1000),
+            max_tokens.unwrap_or(1000) as i32,
             0.8, // temperature
-            Some(100), // top_k
-            Some(0.9),  // top_p
         ).await
     }
 

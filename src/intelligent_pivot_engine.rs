@@ -56,12 +56,12 @@ pub struct PivotIntervention {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PivotResult {
-    should_intervene: bool,
-    intervention_prompt: Option<String>,
-    confidence_level: f32,
-    explanation: String,
-    extracted_elements: Vec<ExtractedElement>,
-    recommended_approach: Option<PivotApproach>,
+    pub should_intervene: bool,
+    pub intervention_prompt: Option<String>,
+    pub confidence_level: f32,
+    pub explanation: String,
+    pub extracted_elements: Vec<ExtractedElement>,
+    pub recommended_approach: Option<PivotApproach>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

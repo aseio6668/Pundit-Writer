@@ -48,7 +48,7 @@ impl EnhancedWriterIntegration {
         &self,
         client: &AIClient,
         model: &str,
-        book: &mut Book,
+        book: &Book,
         section_number: usize,
         section_type: &SectionType,
         base_prompt: &str,
@@ -59,8 +59,8 @@ impl EnhancedWriterIntegration {
 
         // Create writing context
         let writing_context = WritingContext {
-            genre: book.genre.parse().unwrap_or(Genre::Fiction),
-            style: book.writing_style.parse().unwrap_or(WritingStyle::Balanced),
+            genre: Genre::Fiction, // Default to Fiction
+            style: WritingStyle::Creative, // Default to Creative
             target_audience: "General".to_string(),
             constraints: vec!["Maintain consistency".to_string(), "Follow outline".to_string()],
             purpose: "Chapter content generation".to_string(),
@@ -109,12 +109,16 @@ impl EnhancedWriterIntegration {
 
         // 4. Use Enhanced Writer System for final generation
         let generated_content = {
-            let mut enhanced_writer = self.enhanced_writer.lock().unwrap();
-            enhanced_writer.generate_enhanced_content(
+            let enhanced_writer = self.enhanced_writer.lock().unwrap();
+            enhanced_writer.enhanced_generation_with_learning(
+                client,
+                model,
                 &creativity_enhanced_prompt,
-                target_words,
+                section_number,
+                &BookSize::Medium,
                 &writing_context.genre,
                 &writing_context.style,
+                context,
             ).await?
         };
 
@@ -157,10 +161,7 @@ impl EnhancedWriterIntegration {
         let (section_number, genre, style) = section_info;
 
         // Calculate quality score based on feedback
-        let quality_score = match feedback.rating {
-            Some(rating) => rating as f32 / 5.0, // Convert 1-5 rating to 0-1 score
-            None => 0.5, // Default neutral score
-        };
+        let quality_score = feedback.rating as f32 / 10.0; // Convert 1-10 rating to 0-1 score
 
         // Process through advanced learning system
         {
