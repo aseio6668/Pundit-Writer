@@ -2,6 +2,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, anyhow};
 use std::time::Duration;
+use tokio::time::sleep;
 use crate::content::{ContentType, WritingAdjustments, StructuredOutline, StructuredPrompt, PromptContext};
 use crate::models::create_outline_json_schema;
 
@@ -31,22 +32,91 @@ struct OllamaResponse {
 pub struct OllamaClient {
     client: Client,
     base_url: String,
+    max_retries: u32,
+    retry_delay: Duration,
+}
+
+#[derive(Clone)]
+pub struct RetryConfig {
+    pub max_retries: u32,
+    pub initial_delay: Duration,
+    pub max_delay: Duration,
+    pub exponential_backoff: bool,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            initial_delay: Duration::from_secs(2),
+            max_delay: Duration::from_secs(60),
+            exponential_backoff: true,
+        }
+    }
 }
 
 impl OllamaClient {
     pub fn new(base_url: String) -> Result<Self> {
+        Self::new_with_retry_config(base_url, RetryConfig::default())
+    }
+    
+    pub fn new_with_retry_config(base_url: String, retry_config: RetryConfig) -> Result<Self> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(300)) // 5 minutes for local models
+            .timeout(Duration::from_secs(600)) // Extended to 10 minutes for long operations
+            .connect_timeout(Duration::from_secs(30)) // Connection timeout
             .build()
             .map_err(|e| anyhow!("Failed to create HTTP client: {}", e))?;
         
         Ok(Self {
             client,
             base_url,
+            max_retries: retry_config.max_retries,
+            retry_delay: retry_config.initial_delay,
         })
     }
     
     pub async fn generate_text(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
+        self.generate_text_with_retry(model, prompt, max_tokens, temperature).await
+    }
+    
+    async fn generate_text_with_retry(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
+        let mut retry_count = 0;
+        let mut current_delay = self.retry_delay;
+        
+        loop {
+            match self.try_generate_text(model, prompt, max_tokens, temperature).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    if retry_count >= self.max_retries {
+                        return Err(anyhow!("Failed after {} retries. Last error: {}", retry_count, e));
+                    }
+                    
+                    // Check if this is a retryable error
+                    if !is_retryable_error(&e) {
+                        return Err(e);
+                    }
+                    
+                    retry_count += 1;
+                    println!("⚠️  Connection attempt {} failed: {}. Retrying in {:?}...", 
+                        retry_count, e, current_delay);
+                    
+                    // Wait before retry
+                    sleep(current_delay).await;
+                    
+                    // Exponential backoff: double the delay for next retry, up to max
+                    current_delay = std::cmp::min(current_delay * 2, Duration::from_secs(60));
+                    
+                    // Check server health before retry
+                    if !self.check_server_health().await {
+                        println!("🔍 Server health check failed, waiting additional 5 seconds...");
+                        sleep(Duration::from_secs(5)).await;
+                    }
+                }
+            }
+        }
+    }
+    
+    async fn try_generate_text(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
         let url = format!("{}/api/generate", self.base_url);
         
         let request = OllamaRequest {
@@ -98,6 +168,13 @@ impl OllamaClient {
         match self.client.get(&url).send().await {
             Ok(response) => Ok(response.status().is_success()),
             Err(_) => Ok(false),
+        }
+    }
+    
+    async fn check_server_health(&self) -> bool {
+        match self.check_server().await {
+            Ok(true) => true,
+            _ => false,
         }
     }
     
@@ -236,6 +313,47 @@ impl OllamaClient {
     
     // Enhanced method for large content generation with stronger anti-repetition
     pub async fn generate_text_large(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
+        self.generate_text_large_with_retry(model, prompt, max_tokens, temperature).await
+    }
+    
+    async fn generate_text_large_with_retry(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
+        let mut retry_count = 0;
+        let mut current_delay = self.retry_delay;
+        
+        loop {
+            match self.try_generate_text_large(model, prompt, max_tokens, temperature).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    if retry_count >= self.max_retries {
+                        return Err(anyhow!("Large content generation failed after {} retries. Last error: {}", retry_count, e));
+                    }
+                    
+                    // Check if this is a retryable error
+                    if !is_retryable_error(&e) {
+                        return Err(e);
+                    }
+                    
+                    retry_count += 1;
+                    println!("⚠️  Large content generation attempt {} failed: {}. Retrying in {:?}...", 
+                        retry_count, e, current_delay);
+                    
+                    // Wait before retry
+                    sleep(current_delay).await;
+                    
+                    // Exponential backoff
+                    current_delay = std::cmp::min(current_delay * 2, Duration::from_secs(60));
+                    
+                    // Check server health before retry
+                    if !self.check_server_health().await {
+                        println!("🔍 Server health check failed for large content, waiting additional 10 seconds...");
+                        sleep(Duration::from_secs(10)).await; // Longer wait for large content
+                    }
+                }
+            }
+        }
+    }
+    
+    async fn try_generate_text_large(&self, model: &str, prompt: &str, max_tokens: i32, temperature: f32) -> Result<String> {
         let url = format!("{}/api/generate", self.base_url);
         
         let request = OllamaRequest {
@@ -638,4 +756,34 @@ fn complete_incomplete_sentences(text: String) -> String {
     
     // If all else fails, return the original text (it might be acceptable as-is)
     text.to_string()
+}
+
+/// Determine if an error is retryable (network issues, timeouts, server errors)
+/// vs non-retryable (model not found, invalid requests)
+fn is_retryable_error(error: &anyhow::Error) -> bool {
+    let error_msg = error.to_string().to_lowercase();
+    
+    // Non-retryable errors (permanent issues)
+    if error_msg.contains("model") && (error_msg.contains("not found") || error_msg.contains("pull")) {
+        return false; // Model not installed
+    }
+    if error_msg.contains("invalid") || error_msg.contains("malformed") {
+        return false; // Bad request
+    }
+    
+    // Retryable errors (temporary network/server issues)
+    if error_msg.contains("connection") || 
+       error_msg.contains("timeout") || 
+       error_msg.contains("network") ||
+       error_msg.contains("request failed") ||
+       error_msg.contains("502") || // Bad Gateway
+       error_msg.contains("503") || // Service Unavailable  
+       error_msg.contains("504") || // Gateway Timeout
+       error_msg.contains("dns") ||
+       error_msg.contains("unreachable") {
+        return true;
+    }
+    
+    // Default to retryable for unknown errors
+    true
 }

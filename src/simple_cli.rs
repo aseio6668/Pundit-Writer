@@ -283,6 +283,12 @@ pub enum Commands {
         #[arg(long, help = "Generate comprehensive learning report")]
         detailed_report: bool,
     },
+    
+    #[command(about = "Soul Memory - Persistent AI learning system")]
+    SoulMemory {
+        #[command(subcommand)]
+        command: crate::soul_memory_cli::SoulMemoryCommand,
+    },
 }
 
 // String to enum parsing functions

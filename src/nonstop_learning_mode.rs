@@ -13,6 +13,7 @@ use crate::content::ContentType;
 use crate::writer::{write_book, write_screenplay, write_play};
 use crate::advanced_learning_system::AdvancedLearningSystem;
 use crate::master_intelligence_system::MasterIntelligenceSystem;
+use crate::ollama::OllamaClient;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NonstopLearningConfig {
@@ -373,6 +374,28 @@ impl NonstopLearningMode {
                         std::env::set_var("AUTO_APPROVE_OUTLINES", "true");
                     }
                     
+                    // Pre-check Ollama connection health before starting expensive operation
+                    if let Err(e) = self.ensure_ollama_connection().await {
+                        println!("⚠️  Ollama connection issue detected: {}. Skipping this work...", e);
+                        
+                        // Clean up environment variables
+                        std::env::remove_var("NONSTOP_LEARNING_MODE");
+                        std::env::remove_var("AUTO_GENERATE_TITLES");
+                        std::env::remove_var("AUTO_TITLE");
+                        std::env::remove_var("AUTO_DESCRIPTION");
+                        std::env::remove_var("AUTO_APPROVE_OUTLINES");
+                        
+                        let generation_time = start_time.elapsed().as_secs();
+                        return WorkGenerationResult {
+                            success: false,
+                            work_params: params.clone(),
+                            output_path: None,
+                            error_message: Some(format!("Ollama connection failed: {}", e)),
+                            generation_time_seconds: generation_time,
+                            retry_count: 0,
+                        };
+                    }
+                    
                     let result = write_book(
                         params.genre.clone(),
                         params.style.clone(),
@@ -405,6 +428,28 @@ impl NonstopLearningMode {
                         std::env::set_var("AUTO_APPROVE_OUTLINES", "true");
                     }
                     
+                    // Pre-check Ollama connection health before starting expensive operation
+                    if let Err(e) = self.ensure_ollama_connection().await {
+                        println!("⚠️  Ollama connection issue detected: {}. Skipping this work...", e);
+                        
+                        // Clean up environment variables
+                        std::env::remove_var("NONSTOP_LEARNING_MODE");
+                        std::env::remove_var("AUTO_GENERATE_TITLES");
+                        std::env::remove_var("AUTO_TITLE");
+                        std::env::remove_var("AUTO_DESCRIPTION");
+                        std::env::remove_var("AUTO_APPROVE_OUTLINES");
+                        
+                        let generation_time = start_time.elapsed().as_secs();
+                        return WorkGenerationResult {
+                            success: false,
+                            work_params: params.clone(),
+                            output_path: None,
+                            error_message: Some(format!("Ollama connection failed: {}", e)),
+                            generation_time_seconds: generation_time,
+                            retry_count: 0,
+                        };
+                    }
+                    
                     let result = write_screenplay(
                         params.genre.clone(),
                         params.style.clone(),
@@ -435,6 +480,28 @@ impl NonstopLearningMode {
                     }
                     if self.config.auto_approve_outlines {
                         std::env::set_var("AUTO_APPROVE_OUTLINES", "true");
+                    }
+                    
+                    // Pre-check Ollama connection health before starting expensive operation
+                    if let Err(e) = self.ensure_ollama_connection().await {
+                        println!("⚠️  Ollama connection issue detected: {}. Skipping this work...", e);
+                        
+                        // Clean up environment variables
+                        std::env::remove_var("NONSTOP_LEARNING_MODE");
+                        std::env::remove_var("AUTO_GENERATE_TITLES");
+                        std::env::remove_var("AUTO_TITLE");
+                        std::env::remove_var("AUTO_DESCRIPTION");
+                        std::env::remove_var("AUTO_APPROVE_OUTLINES");
+                        
+                        let generation_time = start_time.elapsed().as_secs();
+                        return WorkGenerationResult {
+                            success: false,
+                            work_params: params.clone(),
+                            output_path: None,
+                            error_message: Some(format!("Ollama connection failed: {}", e)),
+                            generation_time_seconds: generation_time,
+                            retry_count: 0,
+                        };
                     }
                     
                     let result = write_play(
@@ -619,6 +686,41 @@ impl NonstopLearningMode {
         intelligence_system: Arc<MasterIntelligenceSystem>) {
         self.learning_system = Some(learning_system);
         self.intelligence_system = Some(intelligence_system);
+    }
+    
+    async fn ensure_ollama_connection(&self) -> Result<()> {
+        println!("🔍 Checking Ollama connection health...");
+        let client = OllamaClient::new("http://localhost:11434".to_string())?;
+        
+        match client.check_server().await {
+            Ok(true) => {
+                println!("✅ Ollama server is healthy");
+                
+                // Also check if the model is available
+                match client.list_models().await {
+                    Ok(models) => {
+                        if models.iter().any(|m| m.contains("llama3.2")) {
+                            println!("✅ Required model 'llama3.2' is available");
+                        } else {
+                            println!("⚠️  Model 'llama3.2' not found, but proceeding (may be auto-downloaded)");
+                            println!("   Available models: {:?}", models);
+                        }
+                    },
+                    Err(e) => {
+                        println!("⚠️  Could not verify model availability: {}", e);
+                        println!("   Proceeding anyway - model may be auto-downloaded during generation");
+                    }
+                }
+                
+                Ok(())
+            },
+            Ok(false) => {
+                Err(anyhow::anyhow!("Ollama server is not responding at localhost:11434"))
+            },
+            Err(e) => {
+                Err(anyhow::anyhow!("Ollama connection failed: {}", e))
+            }
+        }
     }
 }
 

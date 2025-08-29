@@ -30,6 +30,9 @@ mod cognitive_writing_engine;
 mod neural_creativity_enhancer;
 mod master_intelligence_system;
 mod nonstop_learning_mode;
+mod soul_memory;
+mod soul_memory_manager;
+mod soul_memory_cli;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 
@@ -289,6 +292,12 @@ async fn main() -> Result<()> {
                 let expansion_report = master_system.consciousness_expansion(0.8).await?;
                 println!("   ✨ Consciousness expanded by {:.1}%", expansion_report.expansion_achieved * 100.0);
             }
+        },
+        
+        Commands::SoulMemory { command } => {
+            use crate::soul_memory_cli::{SoulMemoryArgs, handle_soul_memory_command};
+            let soul_args = SoulMemoryArgs { command };
+            handle_soul_memory_command(soul_args).await?;
         },
     }
     
