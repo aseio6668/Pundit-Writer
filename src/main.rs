@@ -33,6 +33,9 @@ mod nonstop_learning_mode;
 mod soul_memory;
 mod soul_memory_manager;
 mod soul_memory_cli;
+mod narrative_flow_monitor;
+mod intelligent_pivot_engine;
+mod flow_aware_writer;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 
