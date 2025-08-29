@@ -1330,6 +1330,7 @@ fn get_clean_context_for_section(content: &Content, section_number: usize, secti
         ContentType::Dictionary => "Dictionary",
         ContentType::EducationalLesson => "Educational Lesson",
         ContentType::ChildrensBook => "Children's Book",
+        ContentType::Encyclopedia => "Encyclopedia",
     };
     
     let mut context = format!(
@@ -1654,6 +1655,7 @@ async fn output_content(content: &Content, output_path: Option<PathBuf>, config:
         ContentType::Dictionary => "dictionary",
         ContentType::EducationalLesson => "educationallesson",
         ContentType::ChildrensBook => "childrensbook",
+        ContentType::Encyclopedia => "encyclopedia",
     };
     
     // Save as plain text with UTF-8 encoding
@@ -3316,7 +3318,7 @@ pub async fn continue_content(
         ContentType::MarketingAd | ContentType::PressRelease | ContentType::MediaKit |
         ContentType::BlogPost | ContentType::SeoArticle | ContentType::StrategicDoc |
         ContentType::PlanningDoc | ContentType::MeetingNotes | ContentType::MeetingSummary |
-        ContentType::Dictionary | ContentType::EducationalLesson => SectionType::Section,
+        ContentType::Dictionary | ContentType::EducationalLesson | ContentType::Encyclopedia => SectionType::Section,
         ContentType::ChildrensBook => SectionType::Chapter,
     };
     
@@ -3478,6 +3480,7 @@ fn extract_continuation_context(content: &str, content_type: ContentType) -> Str
             ContentType::Dictionary => "dictionary",
             ContentType::EducationalLesson => "educational lesson",
             ContentType::ChildrensBook => "children's book",
+            ContentType::Encyclopedia => "encyclopedia",
         },
         max_context_words,
         context_excerpt
@@ -5062,6 +5065,7 @@ fn get_enhanced_context_for_section(content: &Content, section_number: usize, se
         ContentType::Dictionary => "Dictionary",
         ContentType::EducationalLesson => "Educational Lesson",
         ContentType::ChildrensBook => "Children's Book",
+        ContentType::Encyclopedia => "Encyclopedia",
     };
     
     let mut context = format!(
@@ -7559,10 +7563,10 @@ pub async fn write_encyclopedia(
     
     // Create client
     let client = if use_local {
-        AIClient::Ollama(OllamaClient::new(ollama_url))
+        AIClient::Ollama(OllamaClient::new(ollama_url)?)
     } else {
         match api_key {
-            Some(key) => AIClient::HuggingFace(HuggingFaceClient::new(key)),
+            Some(key) => AIClient::HuggingFace(HuggingFaceClient::new(key, None)?),
             None => {
                 return Err(anyhow!("No API key provided and local model not enabled"));
             }
@@ -7681,8 +7685,8 @@ pub async fn write_encyclopedia(
     let txt_path = format!("{}/{}.txt", output_dir, base_filename);
     let md_path = format!("{}/{}.md", output_dir, base_filename);
     
-    content.save_to_file(&txt_path)?;
-    content.save_markdown(&md_path)?;
+    std::fs::write(&txt_path, content.to_text())?;
+    std::fs::write(&md_path, content.to_markdown())?;
     
     println!("\n✅ Encyclopedia completed successfully!");
     println!("📄 Text file: {}", txt_path);
@@ -7744,6 +7748,7 @@ async fn write_encyclopedia_entry(
         entry_num,
         topic_title.to_string(),
         format!("Encyclopedia entry: {}", topic_title),
+        crate::content::SectionType::Section,
     );
     
     // Add content to the section

@@ -262,6 +262,7 @@ impl OllamaClient {
             ContentType::Dictionary => ("dictionary", "entry"),
             ContentType::EducationalLesson => ("educational lesson", "module"),
             ContentType::ChildrensBook => ("children's book", "chapter"),
+            ContentType::Encyclopedia => ("encyclopedia", "entry"),
         };
         
         let specific_instructions = match content_type {
@@ -291,6 +292,7 @@ impl OllamaClient {
             ContentType::Dictionary => "Include word definitions, pronunciations, and etymologies.",
             ContentType::EducationalLesson => "Include learning objectives, examples, and practice exercises.",
             ContentType::ChildrensBook => "Include age-appropriate language, engaging characters, and positive themes.",
+            ContentType::Encyclopedia => "Include comprehensive topics with definitions, history, and significance.",
         };
         
         let prompt = format!(
@@ -565,6 +567,15 @@ impl OllamaClient {
                 - Descriptive but simple sentences\n\
                 - Positive themes and lessons\n\
                 - Illustration descriptions in [brackets]"
+            },
+            ContentType::Encyclopedia => {
+                "\n\nFormat as encyclopedia entries with:\n\
+                - Topic headings in bold\n\
+                - Clear definitions and explanations\n\
+                - Historical context and background\n\
+                - Significance and importance\n\
+                - Cross-references to related topics\n\
+                - Categories and classifications"
             },
         };
         
