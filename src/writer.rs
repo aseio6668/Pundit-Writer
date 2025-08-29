@@ -26,6 +26,45 @@ use std::fs;
 use std::time::Duration;
 use tokio::time::sleep;
 
+// Interactive mode settings (temporary, non-persistent)
+#[derive(Debug, Clone)]
+pub struct InteractiveSettings {
+    pub quiet_mode: QuietLevel,
+    pub quality_assurance_enabled: bool,
+    pub ai_learning_feedback: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QuietLevel {
+    Normal,    // Default: show all messages
+    Quiet,     // -q: suppress enhancement messages  
+    VeryQuiet, // -qq: only critical messages
+}
+
+impl Default for InteractiveSettings {
+    fn default() -> Self {
+        Self {
+            quiet_mode: QuietLevel::Normal,
+            quality_assurance_enabled: false, // Off by default
+            ai_learning_feedback: false,      // Off by default
+        }
+    }
+}
+
+impl QuietLevel {
+    pub fn should_show_normal_messages(&self) -> bool {
+        matches!(self, QuietLevel::Normal)
+    }
+    
+    pub fn should_show_progress(&self) -> bool {
+        !matches!(self, QuietLevel::VeryQuiet)
+    }
+    
+    pub fn should_show_ai_enhancements(&self) -> bool {
+        matches!(self, QuietLevel::Normal)
+    }
+}
+
 // Custom result type to handle back navigation without exiting the app
 #[derive(Debug)]
 pub struct BackToMenu;
@@ -1723,8 +1762,16 @@ fn format_as_stage_play(content: &Content) -> String {
 }
 
 pub async fn interactive_mode() -> Result<()> {
+    interactive_mode_with_quiet(QuietLevel::Normal).await
+}
+
+pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
+    
+    // Initialize settings (reset to default each time)
+    let mut settings = InteractiveSettings::default();
+    settings.quiet_mode = quiet_level;
     
     'main: loop {
         println!("{}", console::style("🎭 Pundit - Interactive Content Creator").bold().magenta());
@@ -1770,6 +1817,10 @@ pub async fn interactive_mode() -> Result<()> {
                 // === SPECIAL MODES ===
                 "✨ Freeform Writing - Describe what you want with files/context",
                 "🤖 Nonstop Learning Mode - Autonomous work generation with learning",
+                
+                // === TOOLS ===
+                "📊 File Assessment - Analyze and give feedback on generated files",
+                "⚙️  Settings - Configure temporary session settings",
                 "❌ Exit",
             ];
             
@@ -1880,6 +1931,16 @@ pub async fn interactive_mode() -> Result<()> {
                 20 => {
                     // Nonstop learning mode
                     interactive_nonstop_learning_mode().await
+                },
+                
+                // === TOOLS ===
+                21 => {
+                    // File Assessment
+                    interactive_file_assessment(&settings).await
+                },
+                22 => {
+                    // Settings
+                    interactive_settings_menu(&mut settings).await
                 },
                 _ => {
                     println!("Invalid selection");
@@ -7812,19 +7873,42 @@ pub async fn write_encyclopedia(
         .collect::<String>()
         .replace(' ', "_");
         
-    let output_dir = output.unwrap_or_else(|| "./".to_string());
+    // Handle output path properly
+    let output_path = match output {
+        Some(path) => std::path::PathBuf::from(path),
+        None => {
+            // Use current working directory
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        }
+    };
+    
+    // Ensure the directory exists
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
     let base_filename = format!("encyclopedia_{}_{}", safe_title, timestamp);
     
-    // Save in multiple formats
-    let txt_path = format!("{}/{}.txt", output_dir, base_filename);
-    let md_path = format!("{}/{}.md", output_dir, base_filename);
+    // Create full paths for both formats
+    let txt_path = if output_path.is_dir() {
+        output_path.join(format!("{}.txt", base_filename))
+    } else if output_path.extension().is_some() {
+        // User provided a specific filename
+        output_path.clone()
+    } else {
+        // User provided a path without extension, add .txt
+        output_path.with_extension("txt")
+    };
     
+    let md_path = txt_path.with_extension("md");
+    
+    // Save in both formats
     std::fs::write(&txt_path, content.to_text())?;
     std::fs::write(&md_path, content.to_markdown())?;
     
     println!("\n✅ Encyclopedia completed successfully!");
-    println!("📄 Text file: {}", txt_path);
-    println!("📝 Markdown: {}", md_path);
+    println!("📄 Text file: {}", txt_path.display());
+    println!("📝 Markdown: {}", md_path.display());
     println!("📊 Total entries: {}", content.sections.len());
     println!("📝 Total words: {}", content.metadata.current_word_count);
     
@@ -12816,4 +12900,246 @@ async fn interactive_nonstop_learning_mode() -> Result<()> {
 
     println!("\n✅ Nonstop learning mode completed successfully!");
     Ok(())
+}
+
+// Settings menu for interactive mode
+async fn interactive_settings_menu(settings: &mut InteractiveSettings) -> Result<()> {
+    loop {
+        println!("\n⚙️  Interactive Mode Settings");
+        println!("════════════════════════════");
+        println!("Note: Settings are temporary and reset when the program exits.");
+        println!();
+        
+        // Display current settings
+        let quiet_status = match settings.quiet_mode {
+            QuietLevel::Normal => "Normal (show all messages)",
+            QuietLevel::Quiet => "Quiet (suppress AI enhancement messages)",
+            QuietLevel::VeryQuiet => "Very Quiet (only critical messages)",
+        };
+        let qa_status = if settings.quality_assurance_enabled { "Enabled" } else { "Disabled" };
+        let learning_status = if settings.ai_learning_feedback { "Enabled" } else { "Disabled" };
+        
+        println!("Current Settings:");
+        println!("  🔇 Quiet Mode: {}", quiet_status);
+        println!("  🔍 Quality Assurance: {}", qa_status);
+        println!("  🧠 AI Learning Feedback: {}", learning_status);
+        println!();
+        
+        let options = vec![
+            "🔇 Change Quiet Mode",
+            "🔍 Toggle Quality Assurance",
+            "🧠 Toggle AI Learning Feedback",
+            "← Back to main menu",
+        ];
+        
+        let choice = Select::new()
+            .with_prompt("What would you like to configure?")
+            .items(&options)
+            .default(0)
+            .interact()?;
+        
+        match choice {
+            0 => {
+                // Change quiet mode
+                let quiet_options = vec![
+                    "Normal - Show all messages and progress",
+                    "Quiet - Suppress AI enhancement messages",
+                    "Very Quiet - Only show critical messages",
+                    "← Back",
+                ];
+                
+                let quiet_choice = Select::new()
+                    .with_prompt("Select quiet mode level:")
+                    .items(&quiet_options)
+                    .default(match settings.quiet_mode {
+                        QuietLevel::Normal => 0,
+                        QuietLevel::Quiet => 1,
+                        QuietLevel::VeryQuiet => 2,
+                    })
+                    .interact()?;
+                
+                match quiet_choice {
+                    0 => settings.quiet_mode = QuietLevel::Normal,
+                    1 => settings.quiet_mode = QuietLevel::Quiet,
+                    2 => settings.quiet_mode = QuietLevel::VeryQuiet,
+                    _ => continue,
+                }
+                println!("✓ Quiet mode updated");
+            },
+            1 => {
+                // Toggle Quality Assurance
+                settings.quality_assurance_enabled = !settings.quality_assurance_enabled;
+                let status = if settings.quality_assurance_enabled { "enabled" } else { "disabled" };
+                println!("✓ Quality Assurance {}", status);
+            },
+            2 => {
+                // Toggle AI Learning Feedback
+                settings.ai_learning_feedback = !settings.ai_learning_feedback;
+                let status = if settings.ai_learning_feedback { "enabled" } else { "disabled" };
+                println!("✓ AI Learning Feedback {}", status);
+            },
+            _ => return Err(BackToMenu.into()),
+        }
+    }
+}
+
+// File assessment for analyzing generated content
+async fn interactive_file_assessment(settings: &InteractiveSettings) -> Result<()> {
+    loop {
+        println!("\n📊 File Assessment & Feedback");
+        println!("═══════════════════════════════");
+        println!("Analyze your generated content and provide feedback for AI learning.");
+        println!();
+        
+        // Get file path
+        let file_path: String = Input::new()
+            .with_prompt("Enter the path to the file you want to assess (or 'back' to return)")
+            .interact_text()?;
+        
+        if file_path.trim().to_lowercase() == "back" {
+            return Err(BackToMenu.into());
+        }
+        
+        // Check if file exists
+        let path = std::path::Path::new(&file_path);
+        if !path.exists() {
+            println!("❌ File not found: {}", file_path);
+            continue;
+        }
+        
+        // Read file content
+        let content = match std::fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(e) => {
+                println!("❌ Error reading file: {}", e);
+                continue;
+            }
+        };
+        
+        // Display file info
+        let word_count = content.split_whitespace().count();
+        let char_count = content.chars().count();
+        println!("\n📄 File Analysis:");
+        println!("  📝 Words: {}", word_count);
+        println!("  📏 Characters: {}", char_count);
+        println!("  📁 File: {}", path.display());
+        
+        // Content type detection
+        let content_types = vec![
+            "📚 Fiction Book",
+            "📖 Non-Fiction",
+            "🎬 Screenplay", 
+            "🎭 Stage Play",
+            "📰 Article/Blog",
+            "🏛️ Encyclopedia",
+            "📊 Technical Document",
+            "🎨 Poetry",
+            "📋 Other",
+        ];
+        
+        let content_type_idx = Select::new()
+            .with_prompt("What type of content is this?")
+            .items(&content_types)
+            .default(0)
+            .interact()?;
+        
+        let content_type = content_types[content_type_idx].to_string();
+        
+        // Get writing style assessment
+        let style_types = vec![
+            "✨ Creative",
+            "📝 Formal/Academic", 
+            "💬 Conversational",
+            "📋 Technical",
+            "🎨 Artistic/Poetic",
+            "📰 Journalistic",
+            "🎯 Persuasive",
+        ];
+        
+        let style_idx = Select::new()
+            .with_prompt("What writing style best describes this content?")
+            .items(&style_types)
+            .default(0)
+            .interact()?;
+        
+        let writing_style = style_types[style_idx].to_string();
+        
+        // Get user feedback
+        println!("\n📝 Please provide your assessment:");
+        
+        let overall_quality: String = Input::new()
+            .with_prompt("Overall quality (1-10, or descriptive)")
+            .interact_text()?;
+        
+        let strengths: String = Input::new()
+            .with_prompt("What are the strengths? (e.g., 'good character development, engaging dialogue')")
+            .interact_text()?;
+        
+        let weaknesses: String = Input::new()
+            .with_prompt("What needs improvement? (e.g., 'repetitive when describing action scenes')")
+            .default("".to_string())
+            .interact_text()?;
+        
+        let additional_notes: String = Input::new()
+            .with_prompt("Additional notes or patterns you noticed (optional)")
+            .default("".to_string())
+            .interact_text()?;
+        
+        // Create assessment report
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        let assessment = format!(
+            "File Assessment Report\n\
+            =====================\n\
+            Generated: {}\n\
+            File: {}\n\
+            Content Type: {}\n\
+            Writing Style: {}\n\
+            Word Count: {}\n\
+            \n\
+            Overall Quality: {}\n\
+            \n\
+            Strengths:\n\
+            {}\n\
+            \n\
+            Areas for Improvement:\n\
+            {}\n\
+            \n\
+            Additional Notes:\n\
+            {}\n\
+            \n\
+            ---\n\
+            This assessment can be used to improve AI writing quality in future generations.\
+            ",
+            timestamp, path.display(), content_type, writing_style, word_count,
+            overall_quality, strengths, weaknesses, additional_notes
+        );
+        
+        // Save assessment
+        let assessment_filename = format!("assessment_{}.txt", 
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+        
+        match std::fs::write(&assessment_filename, &assessment) {
+            Ok(_) => {
+                println!("\n✅ Assessment saved to: {}", assessment_filename);
+                
+                if settings.ai_learning_feedback {
+                    println!("🧠 Assessment will be used for AI learning improvements");
+                    // TODO: Here we would integrate with the AI learning system
+                    // to actually use this feedback for model improvement
+                }
+            },
+            Err(e) => {
+                println!("❌ Error saving assessment: {}", e);
+            }
+        }
+        
+        let continue_assess = Confirm::new()
+            .with_prompt("Would you like to assess another file?")
+            .default(false)
+            .interact()?;
+        
+        if !continue_assess {
+            return Ok(());
+        }
+    }
 }

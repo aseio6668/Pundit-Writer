@@ -46,6 +46,15 @@ use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_si
 async fn main() -> Result<()> {
     let args = Args::parse();
     
+    // Convert quiet flags to QuietLevel
+    let quiet_level = if args.very_quiet {
+        writer::QuietLevel::VeryQuiet
+    } else if args.quiet {
+        writer::QuietLevel::Quiet
+    } else {
+        writer::QuietLevel::Normal
+    };
+    
     match args.command {
         Commands::Book { genre, style, size, output, model, api_key, local, ollama_url } => {
             let parsed_genre = parse_genre(&genre)?;
@@ -105,8 +114,10 @@ async fn main() -> Result<()> {
         },
         
         Commands::Interactive => {
-            println!("🚀 Pundit Writer - Interactive Mode");
-            writer::interactive_mode().await?;
+            if quiet_level != writer::QuietLevel::VeryQuiet {
+                println!("🚀 Pundit Writer - Interactive Mode");
+            }
+            writer::interactive_mode_with_quiet(quiet_level).await?;
         },
         
         Commands::NonStop { genre, style, size, output, model, api_key, local, ollama_url, sections, buffer_size, auto_continue } => {

@@ -10,6 +10,12 @@ use crate::cli_types::*;
 pub struct Args {
     #[command(subcommand)]
     pub command: Commands,
+    
+    #[arg(short = 'q', long = "quiet", help = "Quiet mode - suppress AI enhancement messages", global = true)]
+    pub quiet: bool,
+    
+    #[arg(short = 'Q', long = "very-quiet", help = "Very quiet mode - only show critical messages", global = true)]
+    pub very_quiet: bool,
 }
 
 #[derive(Subcommand)]
