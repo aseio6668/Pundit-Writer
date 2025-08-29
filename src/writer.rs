@@ -1765,6 +1765,7 @@ pub async fn interactive_mode() -> Result<()> {
                 "📊 Research & White Papers - Reports, case studies, analysis",
                 "🔬 Technical Documentation - Manuals, APIs, guides",
                 "📰 Blog & SEO Articles - Posts, tutorials, reviews",
+                "🏛️ Encyclopedia - Comprehensive knowledge references and entries",
                 
                 // === SPECIAL MODES ===
                 "✨ Freeform Writing - Describe what you want with files/context",
@@ -1866,13 +1867,17 @@ pub async fn interactive_mode() -> Result<()> {
                     // Blog & SEO articles
                     interactive_blog_creation().await
                 },
+                18 => {
+                    // Encyclopedia creation
+                    interactive_encyclopedia_creation().await
+                },
                 
                 // === SPECIAL MODES ===
-                18 => {
+                19 => {
                     // Freeform writing mode
                     interactive_freeform_writing().await
                 },
-                19 => {
+                20 => {
                     // Nonstop learning mode
                     interactive_nonstop_learning_mode().await
                 },
@@ -5896,6 +5901,135 @@ async fn interactive_blog_creation() -> Result<()> {
             keywords_opt,
             audience_opt,
             length,
+            output,
+            model,
+            api_key,
+            use_local,
+            ollama_url,
+        ).await;
+    }
+}
+
+async fn interactive_encyclopedia_creation() -> Result<()> {
+    loop {
+        println!("\n🏛️  Creating Encyclopedia");
+        println!("Let me help you create comprehensive encyclopedia entries...\n");
+        
+        // Get topic
+        let topic: String = Input::new()
+            .with_prompt("What is the main topic or subject area for your encyclopedia? (or 'back' to return)")
+            .interact_text()?;
+        
+        if topic.trim().to_lowercase() == "back" {
+            return Err(BackToMenu.into());
+        }
+        
+        // Scope selection
+        let scopes = vec![
+            "Comprehensive - Deep, detailed coverage of all aspects",
+            "Specialized - Focused on specific technical/professional aspects", 
+            "Concise - Essential information and key points only",
+            "← Back",
+        ];
+        
+        let scope_idx = Select::new()
+            .with_prompt("What scope of coverage would you like?")
+            .items(&scopes)
+            .default(0)
+            .interact()?;
+        
+        if scope_idx == scopes.len() - 1 {
+            continue;
+        }
+        
+        let scope = match scope_idx {
+            0 => "comprehensive",
+            1 => "specialized", 
+            2 => "concise",
+            _ => "comprehensive",
+        }.to_string();
+        
+        // Number of entries
+        let entries: String = Input::new()
+            .with_prompt("How many encyclopedia entries would you like to generate?")
+            .default("20".to_string())
+            .interact_text()?;
+            
+        if entries.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let entries_count: usize = entries.parse().unwrap_or(20);
+        
+        // Get output file path
+        let output_path: String = Input::new()
+            .with_prompt("Output file path (optional)")
+            .default(format!("{}_encyclopedia.txt", topic.to_lowercase().replace(' ', "_")))
+            .interact_text()?;
+        
+        if output_path.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let output = if output_path.trim().is_empty() {
+            None
+        } else {
+            Some(output_path)
+        };
+        
+        // Get model preferences
+        let model_options = vec![
+            "Use local Ollama (recommended)",
+            "Use HuggingFace API",
+            "← Back",
+        ];
+        
+        let model_idx = Select::new()
+            .with_prompt("Choose your AI model source:")
+            .items(&model_options)
+            .default(0)
+            .interact()?;
+        
+        if model_idx == model_options.len() - 1 {
+            continue;
+        }
+        
+        let use_local = model_idx == 0;
+        
+        let (model, api_key, ollama_url) = if use_local {
+            let model: String = Input::new()
+                .with_prompt("Ollama model name")
+                .default("llama3.2".to_string())
+                .interact_text()?;
+            
+            if model.trim().to_lowercase() == "back" {
+                continue;
+            }
+            
+            let url: String = Input::new()
+                .with_prompt("Ollama server URL")
+                .default("http://localhost:11434".to_string())
+                .interact_text()?;
+                
+            (model, None, url)
+        } else {
+            let model: String = Input::new()
+                .with_prompt("HuggingFace model name")
+                .default("microsoft/DialoGPT-large".to_string())
+                .interact_text()?;
+                
+            let key: String = Input::new()
+                .with_prompt("HuggingFace API key")
+                .interact_text()?;
+                
+            (model, Some(key), "http://localhost:11434".to_string())
+        };
+        
+        println!("\n🚀 Generating encyclopedia...");
+        return write_encyclopedia(
+            topic,
+            scope,
+            entries_count,
             output,
             model,
             api_key,
