@@ -36,6 +36,9 @@ mod soul_memory_cli;
 mod narrative_flow_monitor;
 mod intelligent_pivot_engine;
 mod flow_aware_writer;
+mod metaphorical_writer;
+mod emotional_writing_engine;
+mod enhanced_writer_integration;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 
@@ -301,6 +304,95 @@ async fn main() -> Result<()> {
             use crate::soul_memory_cli::{SoulMemoryArgs, handle_soul_memory_command};
             let soul_args = SoulMemoryArgs { command };
             handle_soul_memory_command(soul_args).await?;
+        },
+        
+        Commands::EmotionalWrite { genre, style, content_type, output, model, theme, show_journey, ollama_url } => {
+            use crate::emotional_writing_engine::EmotionalWritingEngine;
+            
+            let parsed_genre = parse_genre(&genre)?;
+            let parsed_style = parse_writing_style(&style)?;
+            
+            println!("🎭 Starting Emotional Writing Session");
+            println!("   Genre: {}", parsed_genre);
+            println!("   Style: {}", parsed_style);
+            println!("   Theme: {}", theme.as_deref().unwrap_or("Creative exploration"));
+            println!("   Emotional journey logging: {}", show_journey);
+            println!();
+            
+            let mut engine = EmotionalWritingEngine::new(&ollama_url)?;
+            
+            let project_desc = theme.as_deref().unwrap_or("A creative writing project");
+            engine.begin_writing_session(&parsed_genre, &parsed_style, project_desc).await?;
+            
+            // Create a simple prompt based on content type
+            let base_prompt = match content_type.as_str() {
+                "scene" => format!("Write a compelling scene in the {} genre with {} style. Theme: {}", 
+                    format!("{:?}", parsed_genre), 
+                    format!("{:?}", parsed_style), 
+                    project_desc),
+                "chapter" => format!("Write an engaging chapter in the {} genre with {} style. Theme: {}", 
+                    format!("{:?}", parsed_genre), 
+                    format!("{:?}", parsed_style), 
+                    project_desc),
+                _ => format!("Write creatively in the {} genre with {} style. Theme: {}", 
+                    format!("{:?}", parsed_genre), 
+                    format!("{:?}", parsed_style), 
+                    project_desc),
+            };
+            
+            // Create minimal content context for the writing
+            let content = crate::content::Content::new(
+                format!("{:?}", parsed_genre),
+                format!("{:?}", parsed_style),
+                crate::cli_types::BookSize::Medium
+            );
+            
+            let result = engine.write_with_soul(
+                &base_prompt,
+                &model,
+                &parsed_genre,
+                &parsed_style,
+                &content,
+                "Creative writing session",
+                Some(1000)
+            ).await?;
+            
+            println!("\n📖 Generated Content:");
+            println!("────────────────────");
+            println!("{}", result.final_content);
+            
+            if show_journey {
+                println!("\n🎭 Emotional Journey:");
+                println!("─────────────────────");
+                for (i, thought) in result.emotional_journey.iter().enumerate() {
+                    println!("{}. 💭 {}", i + 1, thought);
+                }
+                
+                if !result.breaks_taken.is_empty() {
+                    println!("\n🚶 Breaks Taken:");
+                    for break_exp in &result.breaks_taken {
+                        println!("   • {:?} - {}", break_exp.break_type, 
+                                 break_exp.insights_gained.get(0).unwrap_or(&"Refreshed perspective".to_string()));
+                    }
+                }
+                
+                if !result.creative_insights.is_empty() {
+                    println!("\n✨ Creative Insights:");
+                    for insight in &result.creative_insights {
+                        println!("   💡 {}", insight);
+                    }
+                }
+            }
+            
+            let session_summary = engine.end_writing_session();
+            println!("\n📊 Session Summary:");
+            println!("   Satisfaction: {:.1}%", session_summary.session_satisfaction * 100.0);
+            println!("   Creative energy remaining: {:.1}%", session_summary.creative_energy_remaining * 100.0);
+            
+            if let Some(output_path) = output {
+                std::fs::write(&output_path, &result.final_content)?;
+                println!("💾 Content saved to: {:?}", output_path);
+            }
         },
     }
     

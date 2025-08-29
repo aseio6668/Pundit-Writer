@@ -255,8 +255,9 @@ impl EmotionalWritingEngine {
         })
     }
 
-    fn create_post_break_prompt(&self, base_prompt: &str, break_experience: &crate::metaphorical_writer::BreakExperience, genre: &Genre) -> String {
-        let insight = break_experience.insights_gained.get(0).unwrap_or(&"Gained fresh perspective".to_string());
+    fn create_post_break_prompt(&self, base_prompt: &str, break_experience: &crate::metaphorical_writer::BreakExperience, _genre: &Genre) -> String {
+        let default_insight = "Gained fresh perspective".to_string();
+        let insight = break_experience.insights_gained.get(0).unwrap_or(&default_insight);
         
         format!(
             "After a restorative break, returning to writing with renewed clarity and perspective.\n\n\
@@ -268,7 +269,7 @@ impl EmotionalWritingEngine {
         )
     }
 
-    fn create_alternative_approach_prompt(&self, base_prompt: &str, genre: &Genre) -> String {
+    fn create_alternative_approach_prompt(&self, base_prompt: &str, _genre: &Genre) -> String {
         format!(
             "The first approach wasn't quite right. Trusting creative instincts to find a different path.\n\n\
             {}\n\n\

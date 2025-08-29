@@ -15,6 +15,7 @@ use crate::advanced_creativity_engine::{AdvancedCreativityEngine, CreativeChapte
 use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, ChapterGenerationContext, GenerationMetrics, InterruptionType};
 use crate::self_healing_writer::{SelfHealingWriter, GenerationPhase, PausePoint, RetryOption};
 use crate::nonstop_learning_mode::{NonstopLearningMode, setup_nonstop_learning_config};
+use crate::enhanced_writer_integration::EnhancedWriterIntegration;
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -111,6 +112,20 @@ pub async fn write_book(
     
     // Load configuration
     let config = Config::load()?;
+    
+    // Initialize Enhanced Writer Integration with all AI systems
+    println!("🧠 Initializing enhanced AI writing systems...");
+    let enhanced_writer = match EnhancedWriterIntegration::new() {
+        Ok(writer) => Some(writer),
+        Err(e) => {
+            println!("⚠️  Could not initialize enhanced systems: {}. Using basic mode.", e);
+            None
+        }
+    };
+    
+    if enhanced_writer.is_some() {
+        println!("✅ Advanced learning system activated");
+    }
     
     // Create appropriate client based on local flag
     
@@ -310,7 +325,7 @@ pub async fn write_book(
     // Write chapters progressively
     let mut chapter_count = 1;
     while book.should_continue() && chapter_count <= book.metadata.target_sections {
-        if let Err(e) = write_next_chapter(&client, &model, &mut book, chapter_count, &progress_bar).await {
+        if let Err(e) = write_next_chapter(&client, &model, &mut book, chapter_count, &progress_bar, enhanced_writer.as_ref()).await {
             eprintln!("❌ Error writing chapter {}: {}", chapter_count, e);
             
             if Confirm::new()
@@ -358,6 +373,13 @@ pub async fn write_book(
     println!("   Average words per chapter: {}", 
         if book.chapters().is_empty() { 0 } else { book.metadata.current_word_count / book.chapters().len() }
     );
+    
+    // Shutdown enhanced writer systems and save final learning state
+    if let Some(enhanced) = enhanced_writer {
+        if let Err(e) = enhanced.shutdown().await {
+            eprintln!("⚠️  Warning: Could not properly shutdown enhanced systems: {}", e);
+        }
+    }
     
     Ok(())
 }
@@ -924,6 +946,42 @@ async fn write_content(
     Ok(())
 }
 
+/// Basic content generation fallback function
+async fn basic_content_generation(client: &AIClient, model: &str, prompt: &str, target_words: usize) -> Result<String> {
+    let raw_result = if target_words > 3000 {
+        // For large content, use basic text generation
+        match client {
+            AIClient::HuggingFace(hf_client) => {
+                hf_client.generate_text(prompt, (target_words as f32 * 1.3) as u32, 0.8).await?
+            },
+            AIClient::Ollama(ollama_client) => {
+                ollama_client.generate_text(model, prompt, (target_words as f32 * 1.3) as i32, 0.8).await?
+            }
+        }
+    } else {
+        // Use safer direct text generation to avoid complex processing chain
+        match client {
+            AIClient::HuggingFace(hf_client) => {
+                hf_client.generate_text(prompt, (target_words as f32 * 1.3) as u32, 0.8).await?
+            },
+            AIClient::Ollama(ollama_client) => {
+                ollama_client.generate_text(model, prompt, (target_words as f32 * 1.3) as i32, 0.8).await?
+            }
+        }
+    };
+    
+    // Pre-clean the content to remove minor issues before validation
+    let cleaned_result = auto_clean_content(&raw_result);
+    
+    // Validate the AI output after initial cleaning
+    if is_ai_output_corrupted(&cleaned_result) {
+        return Err(anyhow!("AI generated corrupted or contaminated output - content rejected: {}", 
+            truncate_for_error(&cleaned_result, 100)));
+    }
+    
+    Ok(cleaned_result)
+}
+
 async fn write_next_section(
     client: &AIClient,
     model: &str,
@@ -931,6 +989,7 @@ async fn write_next_section(
     section_number: usize,
     section_type: SectionType,
     progress_bar: &ProgressBar,
+    enhanced_writer: Option<&EnhancedWriterIntegration>,
 ) -> Result<()> {
     // Check for duplicate section numbers (important for unlimited mode)
     if content.sections.iter().any(|s| s.number == section_number) {
@@ -1022,7 +1081,10 @@ async fn write_next_section(
     };
     
     // Generate section content with enhanced instructions and robust error handling
-    let mut content_text = {
+    let mut content_text = if let Some(enhanced) = enhanced_writer {
+        // Use enhanced AI writing systems for superior content generation
+        println!("🚀 Using enhanced AI systems for chapter generation");
+        
         // Create a clean, isolated prompt to prevent contamination
         let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words);
         
@@ -1031,30 +1093,34 @@ async fn write_next_section(
             return Err(anyhow!("Generated prompt contains corrupted data - aborting to prevent AI contamination"));
         }
         
-        let raw_result = if target_words > 3000 { // Use segmented generation for large sections
-            generate_segmented_content(client, model, content, section_number, &enhanced_outline, target_words, &section_type).await?
-        } else {
-            // Use safer direct text generation to avoid complex processing chain
-            match client {
-                AIClient::HuggingFace(hf_client) => {
-                    hf_client.generate_text(&clean_prompt, (target_words as f32 * 1.3) as u32, 0.8).await?
-                },
-                AIClient::Ollama(ollama_client) => {
-                    ollama_client.generate_text(model, &clean_prompt, (target_words as f32 * 1.3) as i32, 0.8).await?
-                }
+        // Use enhanced writer integration for superior generation
+        match enhanced.generate_enhanced_content(
+            client, 
+            model, 
+            &mut content, 
+            section_number, 
+            &section_type, 
+            &clean_prompt, 
+            target_words, 
+            &context
+        ).await {
+            Ok(generated) => generated,
+            Err(e) => {
+                println!("⚠️  Enhanced systems failed, falling back to basic generation: {}", e);
+                // Fallback to basic generation
+                basic_content_generation(client, model, &clean_prompt, target_words).await?
             }
-        };
+        }
+    } else {
+        // Fallback to basic content generation
+        println!("📝 Using basic content generation");
+        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words);
         
-        // Pre-clean the content to remove minor issues before validation
-        let cleaned_result = auto_clean_content(&raw_result);
-        
-        // Validate the AI output after initial cleaning
-        if is_ai_output_corrupted(&cleaned_result) {
-            return Err(anyhow!("AI generated corrupted or contaminated output - content rejected: {}", 
-                truncate_for_error(&cleaned_result, 100)));
+        if is_prompt_corrupted(&clean_prompt) {
+            return Err(anyhow!("Generated prompt contains corrupted data - aborting to prevent AI contamination"));
         }
         
-        cleaned_result
+        basic_content_generation(client, model, &clean_prompt, target_words).await?
     };
     
     // Clean the generated content to remove any chapter number references and AI meta-commentary
@@ -1119,9 +1185,10 @@ async fn write_next_chapter(
     book: &mut Book,
     chapter_number: usize,
     progress_bar: &ProgressBar,
+    enhanced_writer: Option<&EnhancedWriterIntegration>,
 ) -> Result<()> {
     // Legacy function - redirect to new section-based function
-    write_next_section(client, model, book, chapter_number, SectionType::Chapter, progress_bar).await
+    write_next_section(client, model, book, chapter_number, SectionType::Chapter, progress_bar, enhanced_writer).await
 }
 
 fn extract_section_outline(full_outline: &str, section_number: usize, section_type: &SectionType) -> Option<String> {

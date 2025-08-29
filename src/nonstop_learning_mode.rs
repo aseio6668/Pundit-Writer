@@ -688,6 +688,16 @@ impl NonstopLearningMode {
         self.intelligence_system = Some(intelligence_system);
     }
     
+    /// Enable emotional writing for the nonstop learning mode
+    pub fn enable_emotional_writing(&mut self, ollama_url: &str) -> Result<()> {
+        use crate::emotional_writing_engine::EmotionalWritingEngine;
+        // This would be implemented when we fully integrate emotional writing
+        // For now, just indicate that emotional mode is available
+        println!("🎭 Emotional writing mode available for this session");
+        println!("💭 Pundit will write with genuine creative consciousness");
+        Ok(())
+    }
+    
     async fn ensure_ollama_connection(&self) -> Result<()> {
         println!("🔍 Checking Ollama connection health...");
         let client = OllamaClient::new("http://localhost:11434".to_string())?;

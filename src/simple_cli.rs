@@ -289,6 +289,33 @@ pub enum Commands {
         #[command(subcommand)]
         command: crate::soul_memory_cli::SoulMemoryCommand,
     },
+    
+    #[command(about = "Emotional Writing - Write with genuine creative consciousness")]
+    EmotionalWrite {
+        #[arg(short, long, help = "Genre of the work")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(short, long, help = "Content type (book, chapter, scene)", default_value = "chapter")]
+        content_type: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<std::path::PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(long, help = "Project description or theme")]
+        theme: Option<String>,
+        
+        #[arg(long, help = "Enable detailed emotional journey logging")]
+        show_journey: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+    },
 }
 
 // String to enum parsing functions

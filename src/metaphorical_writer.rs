@@ -255,6 +255,7 @@ pub enum WriterMood {
     Peaceful,
     Restless,
     Vulnerable,
+    Focused,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -839,6 +840,7 @@ impl MetaphoricalWriter {
             WriterMood::Passionate => "intensely committed",
             WriterMood::Peaceful => "serenely focused",
             WriterMood::Vulnerable => "courageously honest",
+            WriterMood::Focused => "intently focused",
             _ => "authentically present",
         }
     }
