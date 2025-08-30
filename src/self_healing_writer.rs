@@ -243,10 +243,12 @@ impl SelfHealingWriter {
                 Ok("Retry after delay".to_string())
             }
             ResolutionStrategy::ReduceComplexity => {
-                Ok("Simplified content approach".to_string())
+                let simplified_context = self.simplify_content_complexity(context);
+                Ok(simplified_context)
             }
             ResolutionStrategy::SplitIntoSmallerChunks => {
-                Ok("Breaking into smaller sections".to_string())
+                let chunked_context = self.split_content_into_chunks(context, phase);
+                Ok(chunked_context)
             }
             ResolutionStrategy::ChangeWritingStyle => {
                 Ok("Switching to alternative writing style".to_string())
@@ -265,6 +267,33 @@ impl SelfHealingWriter {
             }
             ResolutionStrategy::ClearMemoryBuffer => {
                 Ok("Memory buffer cleared and reset".to_string())
+            }
+            ResolutionStrategy::ApplyCreativeBlockRecovery => {
+                let recovery_result = self.apply_creative_block_recovery(context, phase);
+                Ok(recovery_result)
+            }
+            ResolutionStrategy::ChangeWritingStyle => {
+                let style_change = self.change_writing_approach(context, phase);
+                Ok(style_change)
+            }
+            ResolutionStrategy::SimplifyLanguage => {
+                let simplified = self.simplify_language_patterns(context);
+                Ok(simplified)
+            }
+            ResolutionStrategy::RefreshContext => {
+                let refreshed = self.refresh_context_memory(context);
+                Ok(refreshed)
+            }
+            ResolutionStrategy::ClearMemoryBuffer => {
+                Ok("MEMORY_CLEARED: Context buffer reset, starting fresh".to_string())
+            }
+            ResolutionStrategy::SkipAndContinue => {
+                let skip_result = self.skip_and_continue(context, phase);
+                Ok(skip_result)
+            }
+            ResolutionStrategy::SeekUserInput => {
+                let user_input_prompt = self.generate_user_input_prompt(context, phase);
+                Ok(user_input_prompt)
             }
             _ => Err("Strategy not implemented for auto-healing".to_string())
         }
@@ -465,6 +494,487 @@ fn strategy_to_string(strategy: &ResolutionStrategy) -> &'static str {
         ResolutionStrategy::ApplyCreativeBlockRecovery => "Creative Recovery",
         ResolutionStrategy::RefreshContext => "Context Refresh",
         ResolutionStrategy::ClearMemoryBuffer => "Memory Clear",
+    }
+}
+
+impl SelfHealingWriter {
+    /// Smart complexity reduction - simplifies overly complex content while preserving meaning
+    fn simplify_content_complexity(&self, context: &str) -> String {
+        let mut simplified = context.to_string();
+        
+        // 1. Break down run-on sentences (>40 words)
+        let sentences: Vec<&str> = simplified.split(". ").collect();
+        let mut simplified_sentences = Vec::new();
+        
+        for sentence in sentences {
+            let word_count = sentence.split_whitespace().count();
+            if word_count > 40 {
+                // Split complex sentence at logical break points
+                let simplified_sentence = self.split_complex_sentence(sentence);
+                simplified_sentences.push(simplified_sentence);
+            } else {
+                simplified_sentences.push(sentence.to_string());
+            }
+        }
+        simplified = simplified_sentences.join(". ");
+        
+        // 2. Replace complex vocabulary with simpler alternatives
+        simplified = self.simplify_vocabulary(&simplified);
+        
+        // 3. Reduce nested clauses and parenthetical expressions
+        simplified = self.reduce_nested_clauses(&simplified);
+        
+        // 4. Convert passive voice to active where possible
+        simplified = self.convert_passive_to_active(&simplified);
+        
+        format!("COMPLEXITY_REDUCED: {}", simplified)
+    }
+    
+    fn split_complex_sentence(&self, sentence: &str) -> String {
+        // Split at conjunctions and relative pronouns
+        let break_points = ["because", "although", "however", "therefore", "meanwhile", "furthermore", "which", "that", "where", "when"];
+        
+        for break_point in break_points {
+            if sentence.contains(break_point) {
+                let parts: Vec<&str> = sentence.splitn(2, break_point).collect();
+                if parts.len() == 2 {
+                    return format!("{}. {} {}", parts[0].trim(), break_point.to_uppercase(), parts[1].trim());
+                }
+            }
+        }
+        sentence.to_string()
+    }
+    
+    fn simplify_vocabulary(&self, text: &str) -> String {
+        let replacements = [
+            ("utilize", "use"), ("demonstrate", "show"), ("sufficient", "enough"),
+            ("numerous", "many"), ("endeavor", "try"), ("facilitate", "help"),
+            ("consequently", "so"), ("nevertheless", "but"), ("furthermore", "also"),
+            ("therefore", "so"), ("however", "but"), ("additionally", "also"),
+            ("subsequently", "then"), ("approximately", "about"), ("occasionally", "sometimes")
+        ];
+        
+        let mut simplified = text.to_string();
+        for (complex, simple) in replacements {
+            simplified = simplified.replace(complex, simple);
+            // Handle capitalized versions
+            let complex_cap = format!("{}{}", &complex[0..1].to_uppercase(), &complex[1..]);
+            let simple_cap = format!("{}{}", &simple[0..1].to_uppercase(), &simple[1..]);
+            simplified = simplified.replace(&complex_cap, &simple_cap);
+        }
+        simplified
+    }
+    
+    fn reduce_nested_clauses(&self, text: &str) -> String {
+        // Remove excessive parenthetical expressions
+        let mut result = text.to_string();
+        
+        // Simplify nested parentheses
+        while result.matches('(').count() > result.matches(')').count() || 
+              result.matches('(').count() > 2 {
+            if let Some(start) = result.find('(') {
+                if let Some(end) = result[start..].find(')') {
+                    let full_end = start + end + 1;
+                    result.replace_range(start..full_end, "");
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        // Reduce em-dash clauses
+        let parts: Vec<&str> = result.split(" — ").collect();
+        if parts.len() > 2 {
+            result = format!("{} — {}", parts[0], parts[parts.len() - 1]);
+        }
+        
+        result
+    }
+    
+    fn convert_passive_to_active(&self, text: &str) -> String {
+        let mut result = text.to_string();
+        
+        // Simple passive voice patterns
+        let passive_patterns = [
+            ("was written by", "wrote"),
+            ("was created by", "created"),
+            ("was discovered by", "discovered"),
+            ("was found by", "found"),
+            ("is considered to be", "is"),
+            ("are believed to be", "are"),
+        ];
+        
+        for (passive, active) in passive_patterns {
+            result = result.replace(passive, active);
+        }
+        
+        result
+    }
+    
+    /// Intelligent content chunking - splits large content into manageable sections
+    fn split_content_into_chunks(&self, context: &str, phase: &GenerationPhase) -> String {
+        let word_count = context.split_whitespace().count();
+        
+        // Determine optimal chunk size based on phase
+        let target_chunk_size = match phase {
+            GenerationPhase::ChapterWriting => 800,      // Chapters can be substantial
+            GenerationPhase::SceneGeneration => 400,     // Scenes are smaller
+            GenerationPhase::DialogueCreation => 200,    // Dialogue is concise
+            GenerationPhase::DescriptiveWriting => 600,  // Descriptions are moderate
+            GenerationPhase::CharacterDevelopment => 500, // Character work is medium
+            _ => 500, // Default for other phases
+        };
+        
+        if word_count <= target_chunk_size {
+            return format!("CHUNK_OPTIMAL: {}", context);
+        }
+        
+        // Find natural break points for splitting
+        let chunks = self.find_natural_breakpoints(context, target_chunk_size);
+        let chunk_count = chunks.len();
+        
+        // Return instructions for chunked generation
+        if chunk_count > 1 {
+            format!(
+                "CHUNKED_GENERATION: Split into {} parts. Current chunk (1/{}): {}",
+                chunk_count,
+                chunk_count,
+                chunks[0]
+            )
+        } else {
+            format!("CHUNK_REDUCED: {}", self.truncate_to_size(context, target_chunk_size))
+        }
+    }
+    
+    fn find_natural_breakpoints(&self, content: &str, target_size: usize) -> Vec<String> {
+        let words: Vec<&str> = content.split_whitespace().collect();
+        let mut chunks = Vec::new();
+        let mut current_chunk = Vec::new();
+        let mut current_size = 0;
+        
+        // Look for natural break points
+        let break_indicators = [
+            ".", "!", "?", ";",           // Sentence endings
+            "Chapter", "Scene", "***",    // Section markers
+            "\n\n", "\n---", "\n###",     // Paragraph/section breaks
+        ];
+        
+        for (i, word) in words.iter().enumerate() {
+            current_chunk.push(*word);
+            current_size += word.len() + 1; // +1 for space
+            
+            // Check if we're near target size and at a natural break
+            if current_size >= target_size * 3 / 4 {  // 75% of target
+                let should_break = break_indicators.iter().any(|indicator| {
+                    word.contains(indicator) || 
+                    (i + 1 < words.len() && words[i + 1].starts_with(indicator))
+                });
+                
+                if should_break || current_size >= target_size {
+                    chunks.push(current_chunk.join(" "));
+                    current_chunk.clear();
+                    current_size = 0;
+                }
+            }
+        }
+        
+        // Add remaining content
+        if !current_chunk.is_empty() {
+            chunks.push(current_chunk.join(" "));
+        }
+        
+        // If no natural breaks found, split at target size
+        if chunks.len() == 1 && current_size > target_size {
+            return self.force_split_at_size(content, target_size);
+        }
+        
+        chunks
+    }
+    
+    fn force_split_at_size(&self, content: &str, target_size: usize) -> Vec<String> {
+        let words: Vec<&str> = content.split_whitespace().collect();
+        let mut chunks = Vec::new();
+        let mut current_chunk = Vec::new();
+        let mut current_size = 0;
+        
+        for word in words {
+            if current_size + word.len() + 1 > target_size && !current_chunk.is_empty() {
+                chunks.push(current_chunk.join(" "));
+                current_chunk.clear();
+                current_size = 0;
+            }
+            current_chunk.push(word);
+            current_size += word.len() + 1;
+        }
+        
+        if !current_chunk.is_empty() {
+            chunks.push(current_chunk.join(" "));
+        }
+        
+        chunks
+    }
+    
+    fn truncate_to_size(&self, content: &str, max_size: usize) -> String {
+        let words: Vec<&str> = content.split_whitespace().collect();
+        let mut result = Vec::new();
+        let mut current_size = 0;
+        
+        for word in words {
+            if current_size + word.len() + 1 > max_size {
+                break;
+            }
+            result.push(word);
+            current_size += word.len() + 1;
+        }
+        
+        let truncated = result.join(" ");
+        if truncated.len() < content.len() {
+            format!("{}... [TRUNCATED]", truncated)
+        } else {
+            truncated
+        }
+    }
+    
+    /// Apply creative block recovery techniques
+    fn apply_creative_block_recovery(&self, context: &str, phase: &GenerationPhase) -> String {
+        // Detect signs of creative block
+        let repetition_score = self.calculate_repetition_score(context);
+        let complexity_score = self.calculate_complexity_score(context);
+        
+        if repetition_score > 0.7 {
+            // High repetition detected - apply variation techniques
+            format!("CREATIVE_RECOVERY: High repetition detected ({}%). Applying variation techniques: {}", 
+                (repetition_score * 100.0) as u8, 
+                self.generate_variation_suggestions(context))
+        } else if complexity_score > 0.8 {
+            // Overly complex - simplify and refresh
+            format!("CREATIVE_RECOVERY: Complexity overload ({}%). Simplifying approach: {}", 
+                (complexity_score * 100.0) as u8,
+                self.generate_simplification_approach(context))
+        } else {
+            // General creative refresh
+            format!("CREATIVE_RECOVERY: Applying creative refresh techniques: {}", 
+                self.generate_creative_refresh_approach(phase))
+        }
+    }
+    
+    fn calculate_repetition_score(&self, context: &str) -> f32 {
+        let words: Vec<&str> = context.split_whitespace().collect();
+        if words.len() < 20 {
+            return 0.0;
+        }
+        
+        let mut word_counts = std::collections::HashMap::new();
+        for word in &words {
+            let clean_word = word.to_lowercase().trim_matches(|c: char| !c.is_alphabetic()).to_string();
+            if clean_word.len() > 3 { // Ignore short words
+                *word_counts.entry(clean_word).or_insert(0) += 1;
+            }
+        }
+        
+        let total_significant_words = word_counts.values().sum::<usize>() as f32;
+        let repeated_words: usize = word_counts.values().filter(|&&count| count > 2).sum();
+        
+        repeated_words as f32 / total_significant_words
+    }
+    
+    fn calculate_complexity_score(&self, context: &str) -> f32 {
+        let sentences: Vec<&str> = context.split('.').collect();
+        let avg_sentence_length = context.split_whitespace().count() as f32 / sentences.len() as f32;
+        
+        let complexity_indicators = context.matches(|c: char| "(),;:".contains(c)).count() as f32;
+        let word_count = context.split_whitespace().count() as f32;
+        
+        // Normalize complexity score
+        let length_factor = (avg_sentence_length / 20.0).min(1.0); // Cap at 20 words per sentence
+        let punctuation_factor = (complexity_indicators / word_count * 10.0).min(1.0);
+        
+        (length_factor + punctuation_factor) / 2.0
+    }
+    
+    fn generate_variation_suggestions(&self, _context: &str) -> String {
+        let techniques = [
+            "Switch narrative perspective", "Add dialogue breaks", "Include sensory details",
+            "Vary sentence structure", "Introduce new character voice", "Change scene tempo"
+        ];
+        
+        let selected = &techniques[0..3]; // Select first 3 techniques
+        selected.join(", ")
+    }
+    
+    fn generate_simplification_approach(&self, _context: &str) -> String {
+        "Focus on core action, reduce nested clauses, use active voice, shorter paragraphs".to_string()
+    }
+    
+    fn generate_creative_refresh_approach(&self, phase: &GenerationPhase) -> String {
+        match phase {
+            GenerationPhase::DialogueCreation => "Add character mannerisms, emotional subtext, conflict",
+            GenerationPhase::DescriptiveWriting => "Use vivid imagery, sensory details, metaphorical language",
+            GenerationPhase::CharacterDevelopment => "Reveal internal conflicts, hidden motivations, backstory",
+            GenerationPhase::PlotAdvancement => "Introduce complications, raise stakes, add urgency",
+            _ => "Apply fresh perspective, unexpected elements, emotional depth",
+        }.to_string()
+    }
+    
+    /// Change writing approach for variety
+    fn change_writing_approach(&self, context: &str, phase: &GenerationPhase) -> String {
+        let current_style = self.detect_current_style(context);
+        let new_approach = match (phase, current_style.as_str()) {
+            (GenerationPhase::DialogueCreation, "formal") => "casual conversational",
+            (GenerationPhase::DialogueCreation, "casual") => "dramatic tension-filled",
+            (GenerationPhase::DescriptiveWriting, "verbose") => "concise impactful",
+            (GenerationPhase::DescriptiveWriting, "minimal") => "rich detailed",
+            (GenerationPhase::ChapterWriting, "action-heavy") => "character-focused",
+            (GenerationPhase::ChapterWriting, "introspective") => "plot-driven",
+            _ => "balanced narrative",
+        };
+        
+        format!("STYLE_CHANGE: Switching from {} to {} approach", current_style, new_approach)
+    }
+    
+    fn detect_current_style(&self, context: &str) -> String {
+        let dialogue_ratio = context.matches('"').count() as f32 / context.len() as f32;
+        let avg_sentence_length = context.split_whitespace().count() as f32 / context.split('.').count() as f32;
+        let action_words = context.matches(|c: char| c.is_alphabetic()).count();
+        
+        if dialogue_ratio > 0.1 {
+            "dialogue-heavy"
+        } else if avg_sentence_length > 25.0 {
+            "verbose"
+        } else if avg_sentence_length < 10.0 {
+            "minimal"
+        } else if action_words > context.len() / 8 {
+            "action-heavy"
+        } else {
+            "formal"
+        }.to_string()
+    }
+    
+    /// Simplify language patterns
+    fn simplify_language_patterns(&self, context: &str) -> String {
+        let simplified = self.simplify_vocabulary(context);
+        let further_simplified = self.reduce_sentence_complexity(&simplified);
+        format!("LANGUAGE_SIMPLIFIED: {}", further_simplified)
+    }
+    
+    fn reduce_sentence_complexity(&self, text: &str) -> String {
+        // Break compound sentences at conjunctions
+        let conjunctions = [" and ", " but ", " or ", " so ", " yet "];
+        let mut simplified = text.to_string();
+        
+        for conjunction in conjunctions {
+            if simplified.contains(conjunction) {
+                simplified = simplified.replace(conjunction, &format!(".{}", conjunction.trim()));
+            }
+        }
+        
+        simplified
+    }
+    
+    /// Refresh context memory
+    fn refresh_context_memory(&self, context: &str) -> String {
+        let key_elements = self.extract_key_story_elements(context);
+        format!("CONTEXT_REFRESHED: Preserved key elements: {}. Memory optimized for continued generation.", key_elements)
+    }
+    
+    fn extract_key_story_elements(&self, context: &str) -> String {
+        let mut elements = Vec::new();
+        
+        // Extract character names (capitalized words that appear multiple times)
+        let words: Vec<&str> = context.split_whitespace().collect();
+        let mut word_counts = std::collections::HashMap::new();
+        
+        for word in words {
+            let clean = word.trim_matches(|c: char| !c.is_alphabetic());
+            if clean.len() > 2 && clean.chars().next().unwrap().is_uppercase() {
+                *word_counts.entry(clean).or_insert(0) += 1;
+            }
+        }
+        
+        // Characters mentioned multiple times
+        for (word, count) in word_counts {
+            if count > 2 {
+                elements.push(word.to_string());
+            }
+        }
+        
+        if elements.is_empty() {
+            "narrative continuity, story flow".to_string()
+        } else {
+            elements.join(", ")
+        }
+    }
+
+    /// Skip problematic section and continue with generation
+    fn skip_and_continue(&self, context: &str, phase: &GenerationPhase) -> String {
+        let skip_indicators = self.create_skip_indicators(phase);
+        let continuation_hint = self.generate_continuation_hint(context, phase);
+        
+        format!("SECTION_SKIPPED: {}. Continuing with: {}", skip_indicators, continuation_hint)
+    }
+    
+    fn create_skip_indicators(&self, phase: &GenerationPhase) -> String {
+        match phase {
+            GenerationPhase::DialogueCreation => "Dialogue section bypassed - moving to narrative",
+            GenerationPhase::DescriptiveWriting => "Description condensed - focusing on action",
+            GenerationPhase::ChapterWriting => "Chapter section streamlined - advancing plot",
+            GenerationPhase::SceneGeneration => "Scene transition accelerated",
+            GenerationPhase::CharacterDevelopment => "Character detail deferred - maintaining story flow",
+            _ => "Complex section simplified - maintaining narrative momentum"
+        }.to_string()
+    }
+    
+    fn generate_continuation_hint(&self, context: &str, phase: &GenerationPhase) -> String {
+        let last_sentences: Vec<&str> = context.split('.').collect();
+        let recent_context = last_sentences.iter().rev().take(2).map(|s| s.to_string()).collect::<Vec<_>>().join(".");
+        
+        match phase {
+            GenerationPhase::DialogueCreation => "narrative action and scene progression",
+            GenerationPhase::DescriptiveWriting => "character dialogue and plot advancement",  
+            GenerationPhase::ChapterWriting => {
+                if recent_context.contains("said") || recent_context.contains('"') {
+                    "continuing dialogue flow"
+                } else {
+                    "advancing narrative timeline"
+                }
+            }
+            _ => "maintaining story momentum with simplified approach"
+        }.to_string()
+    }
+
+    /// Generate user input prompt for manual assistance
+    fn generate_user_input_prompt(&self, context: &str, phase: &GenerationPhase) -> String {
+        let problem_analysis = self.analyze_generation_problem(context, phase);
+        let user_guidance = self.create_user_guidance(phase);
+        
+        format!("USER_INPUT_REQUESTED: {} - {}", problem_analysis, user_guidance)
+    }
+    
+    fn analyze_generation_problem(&self, context: &str, phase: &GenerationPhase) -> String {
+        let context_length = context.len();
+        let complexity_level = if context_length > 2000 { "high" } else if context_length > 500 { "medium" } else { "low" };
+        
+        match phase {
+            GenerationPhase::DialogueCreation => format!("Dialogue generation stalled (complexity: {})", complexity_level),
+            GenerationPhase::DescriptiveWriting => format!("Descriptive writing blocked (context: {} chars)", context_length),
+            GenerationPhase::ChapterWriting => format!("Chapter progression halted (complexity: {})", complexity_level),
+            GenerationPhase::CharacterDevelopment => "Character development requires creative input".to_string(),
+            GenerationPhase::PlotAdvancement => "Plot logic needs resolution".to_string(),
+            _ => format!("Generation issue in {:?} phase", phase)
+        }
+    }
+    
+    fn create_user_guidance(&self, phase: &GenerationPhase) -> String {
+        match phase {
+            GenerationPhase::DialogueCreation => "Please provide dialogue direction or character voice guidance",
+            GenerationPhase::DescriptiveWriting => "Suggest specific details, mood, or sensory elements to include",
+            GenerationPhase::ChapterWriting => "Provide plot direction, pacing preference, or content focus",
+            GenerationPhase::CharacterDevelopment => "Specify character traits, development arc, or relationship dynamics",
+            GenerationPhase::PlotAdvancement => "Clarify plot direction, resolve conflicts, or suggest next events",
+            _ => "Please provide creative guidance or specify how to proceed"
+        }.to_string()
     }
 }
 

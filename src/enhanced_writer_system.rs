@@ -272,8 +272,13 @@ impl EnhancedWriterSystem {
     }
 
     pub async fn should_request_feedback(&self) -> bool {
-        let healing_writer = self.self_healing.lock().unwrap();
-        healing_writer.success_metrics.total_generations % self.user_feedback_frequency == 0
+        // Respect silent generation mode - feedback prompts are disabled by default
+        // Users can still access feedback through the interactive file assessment menu
+        false
+        
+        // Original feedback frequency logic (now disabled):
+        // let healing_writer = self.self_healing.lock().unwrap();
+        // healing_writer.success_metrics.total_generations % self.user_feedback_frequency == 0
     }
 
     pub async fn assess_content_quality(&self, content: &str) -> f32 {
