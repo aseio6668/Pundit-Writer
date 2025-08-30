@@ -3471,8 +3471,9 @@ pub async fn continue_content(
     
     // Save the continuation
     let output_path = output.unwrap_or_else(|| {
-        PathBuf::from(format!("continuation_{}.md", 
-            content.title.to_lowercase().replace(' ', "_")))
+        crate::config::get_default_output_path("continuation", &content.title, "md")
+            .unwrap_or_else(|_| PathBuf::from(format!("continuation_{}.md", 
+                content.title.to_lowercase().replace(' ', "_"))))
     });
     
     let final_content = content.to_markdown();
@@ -3713,8 +3714,9 @@ pub async fn write_technical_doc(
     
     // Save the documentation
     let output_path = output.unwrap_or_else(|| {
-        PathBuf::from(format!("{}.md", 
-            content.title.to_lowercase().replace(' ', "_")))
+        crate::config::get_default_output_path("technical_doc", &content.title, "md")
+            .unwrap_or_else(|_| PathBuf::from(format!("{}.md", 
+                content.title.to_lowercase().replace(' ', "_"))))
     });
     
     let final_content = content.to_markdown();
@@ -3836,8 +3838,9 @@ pub async fn write_research_doc(
     
     // Save the documentation
     let output_path = output.unwrap_or_else(|| {
-        PathBuf::from(format!("{}.md", 
-            content.title.to_lowercase().replace(' ', "_")))
+        crate::config::get_default_output_path("research_doc", &content.title, "md")
+            .unwrap_or_else(|_| PathBuf::from(format!("{}.md", 
+                content.title.to_lowercase().replace(' ', "_"))))
     });
     
     let final_content = content.to_markdown();
@@ -4011,8 +4014,9 @@ pub async fn write_poetry(
     
     // Save the poetry collection
     let output_path = output.unwrap_or_else(|| {
-        PathBuf::from(format!("{}.md", 
-            content.title.to_lowercase().replace(' ', "_")))
+        crate::config::get_default_output_path("poetry", &content.title, "md")
+            .unwrap_or_else(|_| PathBuf::from(format!("{}.md", 
+                content.title.to_lowercase().replace(' ', "_"))))
     });
     
     let final_content = content.to_markdown();

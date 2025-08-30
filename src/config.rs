@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, anyhow};
-use directories::ProjectDirs;
+use directories::{ProjectDirs, UserDirs};
 use std::path::PathBuf;
 use std::fs;
 
@@ -100,23 +100,51 @@ fn get_config_path() -> Result<PathBuf> {
 }
 
 fn get_default_output_dir() -> PathBuf {
+    // Try to use system Documents directory first
+    if let Some(user_dirs) = directories::UserDirs::new() {
+        if let Some(document_dir) = user_dirs.document_dir() {
+            return document_dir.join("Pundit");
+        }
+    }
+    
+    // Fallback to project data directory
     if let Some(project_dirs) = ProjectDirs::from("com", "pundit", "pundit-writer") {
-        project_dirs.data_dir().join("books")
+        project_dirs.data_dir().join("content")
     } else {
-        PathBuf::from("./books")
+        PathBuf::from("./pundit-content")
     }
 }
 
-pub fn get_books_dir() -> Result<PathBuf> {
+pub fn get_content_output_dir() -> Result<PathBuf> {
     let config = Config::load()?;
-    let books_dir = config.output_directory;
+    let output_dir = config.output_directory;
     
-    if !books_dir.exists() {
-        fs::create_dir_all(&books_dir)
-            .map_err(|e| anyhow!("Failed to create books directory: {}", e))?;
+    if !output_dir.exists() {
+        fs::create_dir_all(&output_dir)
+            .map_err(|e| anyhow!("Failed to create output directory: {}", e))?;
     }
     
-    Ok(books_dir)
+    Ok(output_dir)
+}
+
+// Legacy alias for compatibility
+pub fn get_books_dir() -> Result<PathBuf> {
+    get_content_output_dir()
+}
+
+pub fn get_default_output_path(content_type: &str, title: &str, extension: &str) -> Result<PathBuf> {
+    let output_dir = get_content_output_dir()?;
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let safe_title = title.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<&str>>()
+        .join("_");
+    
+    let filename = format!("{}_{}.{}", content_type, safe_title, extension);
+    Ok(output_dir.join(filename))
 }
 
 pub fn get_learning_data_dir() -> Result<PathBuf> {
