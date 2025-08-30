@@ -210,11 +210,11 @@ impl MasterIntelligenceSystem {
             style
         ).await?;
 
-        println!("   ✨ Original prompt enhanced with:");
-        println!("      • Cognitive reasoning scaffolds");
-        println!("      • Creative enhancement triggers");
-        println!("      • Learning-informed improvements");
-        println!("      • Meta-cognitive awareness");
+        // println!("   ✨ Original prompt enhanced with:");
+        // println!("      • Cognitive reasoning scaffolds");
+        // println!("      • Creative enhancement triggers");
+        // println!("      • Learning-informed improvements");
+        // println!("      • Meta-cognitive awareness");
 
         // Phase 3: Multi-System Generation with Real-time Learning
         println!("🎯 Phase 3: Multi-System Generation");

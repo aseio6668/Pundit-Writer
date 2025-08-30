@@ -10,6 +10,15 @@ license = "MIT"
 name = "pundit"
 path = "src/main.rs"
 
+[profile.dev]
+# Increase stack size for development builds to handle deep recursion
+# Windows default is 1MB, we're setting it to 16MB
+overflow-checks = false
+
+[profile.release]
+# Increase stack size for release builds
+overflow-checks = false
+
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }

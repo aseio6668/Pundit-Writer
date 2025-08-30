@@ -405,6 +405,7 @@ impl NonstopLearningMode {
                         None, // api_key
                         true, // local
                         "http://localhost:11434".to_string(), // ollama_url
+                        "English", // language - default to English for non-interactive mode
                     ).await;
                     
                     // Clean up environment variables
@@ -459,6 +460,7 @@ impl NonstopLearningMode {
                         None,
                         true,
                         "http://localhost:11434".to_string(),
+                        "English", // language - default to English for non-interactive mode
                     ).await;
                     
                     // Clean up environment variables
@@ -513,6 +515,7 @@ impl NonstopLearningMode {
                         None,
                         true,
                         "http://localhost:11434".to_string(),
+                        "English", // language - default to English for non-interactive mode
                     ).await;
                     
                     // Clean up environment variables

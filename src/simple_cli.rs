@@ -16,6 +16,9 @@ pub struct Args {
     
     #[arg(short = 'Q', long = "very-quiet", help = "Very quiet mode - only show critical messages", global = true)]
     pub very_quiet: bool,
+    
+    #[arg(short = 'l', long = "language", help = "Language for content generation (default: English)", global = true)]
+    pub language: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -348,6 +351,45 @@ pub enum Commands {
         
         #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
         ollama_url: String,
+    },
+
+    #[command(about = "Contemplative Writing - Create content with deep reflection and reduced chatter")]
+    Contemplative {
+        #[arg(short = 't', long = "type", help = "Content type (book, poetry, screenplay, etc.)", default_value = "book")]
+        content_type: String,
+        
+        #[arg(short, long, help = "Genre of the content")]
+        genre: String,
+        
+        #[arg(short, long, help = "Writing style")]
+        style: String,
+        
+        #[arg(long, help = "Content size/length", default_value = "medium")]
+        size: String,
+        
+        #[arg(short, long, help = "Output file path")]
+        output: Option<std::path::PathBuf>,
+        
+        #[arg(short, long, help = "Model to use", default_value = "llama3.2")]
+        model: String,
+        
+        #[arg(short = 'k', long, help = "Hugging Face API key")]
+        api_key: Option<String>,
+        
+        #[arg(long, help = "Use local Ollama instead of HuggingFace API")]
+        local: bool,
+        
+        #[arg(long, help = "Ollama server URL", default_value = "http://localhost:11434")]
+        ollama_url: String,
+        
+        #[arg(long, help = "Contemplation depth level (0.1 to 1.0)", default_value = "0.7")]
+        depth: f32,
+        
+        #[arg(long, help = "Number of sections/chapters", default_value = "5")]
+        sections: u32,
+        
+        #[arg(long, help = "Enable detailed meditation state logging")]
+        show_meditation: bool,
     },
 }
 

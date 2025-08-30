@@ -59,7 +59,7 @@ impl EnhancedWriterSystem {
         };
 
         if enhanced_prompt != prompt {
-            println!("✨ Applied adaptive improvements to prompt");
+            // println!("✨ Applied adaptive improvements to prompt");
         }
 
         // Phase 3: Self-healing generation attempt

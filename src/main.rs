@@ -39,6 +39,8 @@ mod flow_aware_writer;
 mod metaphorical_writer;
 mod emotional_writing_engine;
 mod enhanced_writer_integration;
+mod silent_mind_writer;
+mod contemplative_writer_engine;
 
 use simple_cli::{Args, Commands, parse_genre, parse_writing_style, parse_book_size, parse_screenplay_length, parse_play_length};
 
@@ -63,6 +65,7 @@ async fn main() -> Result<()> {
             
             println!("🚀 Generating {} {} book in {} style...", parsed_size.to_string(), parsed_genre, parsed_style);
             
+            let language = args.language.as_deref().unwrap_or("English");
             writer::write_book(
                 parsed_genre,
                 parsed_style,
@@ -72,6 +75,7 @@ async fn main() -> Result<()> {
                 api_key,
                 local,
                 ollama_url,
+                language,
             ).await?;
         },
         
@@ -82,6 +86,7 @@ async fn main() -> Result<()> {
             
             println!("🎬 Generating {} screenplay in {} style...", parsed_genre, parsed_style);
             
+            let language = args.language.as_deref().unwrap_or("English");
             writer::write_screenplay(
                 parsed_genre,
                 parsed_style,
@@ -91,6 +96,7 @@ async fn main() -> Result<()> {
                 api_key,
                 local,
                 ollama_url,
+                language,
             ).await?;
         },
         
@@ -101,6 +107,7 @@ async fn main() -> Result<()> {
             
             println!("🎭 Generating {} play in {} style...", parsed_genre, parsed_style);
             
+            let language = args.language.as_deref().unwrap_or("English");
             writer::write_play(
                 parsed_genre,
                 parsed_style,
@@ -110,6 +117,7 @@ async fn main() -> Result<()> {
                 api_key,
                 local,
                 ollama_url,
+                language,
             ).await?;
         },
         
@@ -117,7 +125,7 @@ async fn main() -> Result<()> {
             if quiet_level != writer::QuietLevel::VeryQuiet {
                 println!("🚀 Pundit Writer - Interactive Mode");
             }
-            writer::interactive_mode_with_quiet(quiet_level).await?;
+            writer::interactive_mode_with_settings(quiet_level, args.language.clone()).await?;
         },
         
         Commands::NonStop { genre, style, size, output, model, api_key, local, ollama_url, sections, buffer_size, auto_continue } => {
@@ -424,6 +432,35 @@ async fn main() -> Result<()> {
                 api_key,
                 local,
                 ollama_url,
+            ).await?;
+        },
+
+        Commands::Contemplative { content_type, genre, style, size, output, model, api_key, local, ollama_url, depth, sections, show_meditation } => {
+            let parsed_genre = parse_genre(&genre)?;
+            let parsed_style = parse_writing_style(&style)?;
+            let parsed_size = parse_book_size(&size)?;
+            
+            println!("🧘 Initiating Contemplative Writing Mode");
+            println!("   Content: {} in {} style", parsed_genre, parsed_style);
+            println!("   Contemplation depth: {:.1}%", depth * 100.0);
+            println!("   Meditation integration: ACTIVE");
+            println!();
+            
+            let language = args.language.as_deref().unwrap_or("English");
+            crate::writer::write_contemplative_content(
+                content_type,
+                parsed_genre,
+                parsed_style,
+                parsed_size,
+                output,
+                model,
+                api_key,
+                local,
+                ollama_url,
+                depth,
+                sections,
+                show_meditation,
+                language,
             ).await?;
         },
     }

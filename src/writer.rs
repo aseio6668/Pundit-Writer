@@ -16,6 +16,8 @@ use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, Chap
 use crate::self_healing_writer::{SelfHealingWriter, GenerationPhase, PausePoint, RetryOption};
 use crate::nonstop_learning_mode::{NonstopLearningMode, setup_nonstop_learning_config};
 use crate::enhanced_writer_integration::EnhancedWriterIntegration;
+use crate::silent_mind_writer::SilentMindWriter;
+use crate::contemplative_writer_engine::ContemplativeWriterEngine;
 use anyhow::{Result, anyhow};
 use dialoguer::{Input, Select, Confirm};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -32,6 +34,7 @@ pub struct InteractiveSettings {
     pub quiet_mode: QuietLevel,
     pub quality_assurance_enabled: bool,
     pub ai_learning_feedback: bool,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -47,6 +50,7 @@ impl Default for InteractiveSettings {
             quiet_mode: QuietLevel::Normal,
             quality_assurance_enabled: false, // Off by default
             ai_learning_feedback: false,      // Off by default
+            language: "English".to_string(),  // Default to English
         }
     }
 }
@@ -64,6 +68,19 @@ impl QuietLevel {
         matches!(self, QuietLevel::Normal)
     }
 }
+
+// Available languages for content generation
+pub const AVAILABLE_LANGUAGES: &[&str] = &[
+    "English", "Spanish", "French", "German", "Italian", "Portuguese", "Russian", 
+    "Chinese (Simplified)", "Chinese (Traditional)", "Japanese", "Korean", "Arabic",
+    "Hindi", "Dutch", "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech",
+    "Hungarian", "Romanian", "Bulgarian", "Croatian", "Serbian", "Slovak", "Slovenian",
+    "Estonian", "Latvian", "Lithuanian", "Greek", "Turkish", "Hebrew", "Persian",
+    "Urdu", "Bengali", "Tamil", "Telugu", "Marathi", "Gujarati", "Punjabi", "Malayalam",
+    "Kannada", "Thai", "Vietnamese", "Indonesian", "Malay", "Filipino", "Ukrainian",
+    "Welsh", "Irish", "Scots Gaelic", "Basque", "Catalan", "Galician", "Afrikaans",
+    "Zulu", "Xhosa", "Swahili", "Amharic", "Yoruba", "Igbo", "Hausa"
+];
 
 // Custom result type to handle back navigation without exiting the app
 #[derive(Debug)]
@@ -141,6 +158,7 @@ pub async fn write_book(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -364,17 +382,18 @@ pub async fn write_book(
     // Write chapters progressively
     let mut chapter_count = 1;
     while book.should_continue() && chapter_count <= book.metadata.target_sections {
-        if let Err(e) = write_next_chapter(&client, &model, &mut book, chapter_count, &progress_bar, enhanced_writer.as_ref()).await {
+        if let Err(e) = write_next_chapter(&client, &model, &mut book, chapter_count, &progress_bar, enhanced_writer.as_ref(), language).await {
             eprintln!("❌ Error writing chapter {}: {}", chapter_count, e);
             
-            if Confirm::new()
-                .with_prompt("Retry this chapter?")
-                .default(true)
-                .interact()? {
-                continue;
-            } else {
-                break;
-            }
+            // Auto-retry failed chapters (quiet mode)
+            // if Confirm::new()
+            //     .with_prompt("Retry this chapter?")
+            //     .default(true)
+            //     .interact()? {
+            continue;
+            // } else {
+            //     break;
+            // }
         }
         
         // Auto-save after each chapter
@@ -386,12 +405,13 @@ pub async fn write_book(
         
         // For unlimited mode, check if we should continue
         if size == BookSize::Unlimited && chapter_count > book.metadata.target_sections {
-            if !Confirm::new()
-                .with_prompt("Continue writing more chapters?")
-                .default(false)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with more chapters (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue writing more chapters?")
+            //     .default(false)
+            //     .interact()? {
+            //     break;
+            // }
             book.metadata.target_sections += 10; // Extend target
         }
     }
@@ -432,6 +452,7 @@ pub async fn write_screenplay(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let target_pages = match length {
         ScreenplayLength::Short => 25,
@@ -452,6 +473,7 @@ pub async fn write_screenplay(
         target_pages,
         SectionType::Scene,
         "Screenplay",
+        language,
     ).await
 }
 
@@ -464,6 +486,7 @@ pub async fn write_play(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let target_acts = match length {
         PlayLength::OneAct => 1,
@@ -485,6 +508,7 @@ pub async fn write_play(
         target_acts * 20, // Rough estimate: 20 pages per act
         SectionType::Act,
         "Stage Play",
+        language,
     ).await
 }
 
@@ -498,6 +522,7 @@ pub async fn write_tv_script(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let show_type_str = match show_type {
         TvShowType::Sitcom => "Sitcom",
@@ -527,6 +552,7 @@ pub async fn write_tv_script(
         episodes as usize * 25, // Rough estimate: 25 pages per episode
         SectionType::Episode,
         "TV Script",
+        language,
     ).await
 }
 
@@ -540,6 +566,7 @@ pub async fn write_audio_script(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let audio_type_str = match audio_type {
         AudioType::AudioDrama => "Audio Drama",
@@ -566,6 +593,7 @@ pub async fn write_audio_script(
         segments as usize * 5, // Rough estimate: 5 pages per segment
         SectionType::Segment,
         "Audio Script",
+        language,
     ).await
 }
 
@@ -578,6 +606,7 @@ pub async fn write_game_script(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let genre_str = match genre {
         GameGenre::RPG => "RPG",
@@ -606,6 +635,7 @@ pub async fn write_game_script(
         characters as usize * 3, // Rough estimate: 3 pages per character interaction
         SectionType::Interaction,
         "Game Script",
+        language,
     ).await
 }
 
@@ -618,6 +648,7 @@ pub async fn write_document(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let (doc_type_str, target_pages) = match (&doc_type, &length) {
         (DocumentType::BusinessPlan, DocumentLength::Brief) => ("Business Plan", 5),
@@ -691,6 +722,7 @@ pub async fn write_document(
         target_pages,
         SectionType::Section,
         doc_type_str,
+        language,
     ).await
 }
 
@@ -707,6 +739,7 @@ async fn write_content(
     target_pages: usize,
     section_type: SectionType,
     content_name: &str,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -944,17 +977,18 @@ async fn write_content(
     // Write sections progressively
     let mut section_count = 1;
     while content.should_continue() && section_count <= content.metadata.target_sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_count, section_type, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_count, section_type, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_count, e);
             
-            if Confirm::new()
-                .with_prompt("Retry this section?")
-                .default(true)
-                .interact()? {
-                continue;
-            } else {
-                break;
-            }
+            // Auto-retry failed sections (quiet mode)
+            // if Confirm::new()
+            //     .with_prompt("Retry this section?")
+            //     .default(true)
+            //     .interact()? {
+            continue;
+            // } else {
+            //     break;
+            // }
         }
         
         // Auto-save after each section
@@ -1029,6 +1063,7 @@ async fn write_next_section(
     section_type: SectionType,
     progress_bar: &ProgressBar,
     enhanced_writer: Option<&EnhancedWriterIntegration>,
+    language: &str,
 ) -> Result<()> {
     // Check for duplicate section numbers (important for unlimited mode)
     if content.sections.iter().any(|s| s.number == section_number) {
@@ -1125,7 +1160,7 @@ async fn write_next_section(
         println!("🚀 Using enhanced AI systems for chapter generation");
         
         // Create a clean, isolated prompt to prevent contamination
-        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words);
+        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words, language);
         
         // Validate prompt isn't corrupted before sending to AI
         if is_prompt_corrupted(&clean_prompt) {
@@ -1153,7 +1188,7 @@ async fn write_next_section(
     } else {
         // Fallback to basic content generation
         println!("📝 Using basic content generation");
-        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words);
+        let clean_prompt = create_isolated_generation_prompt(&content.content_type, &content.genre, &context, &enhanced_outline, target_words, language);
         
         if is_prompt_corrupted(&clean_prompt) {
             return Err(anyhow!("Generated prompt contains corrupted data - aborting to prevent AI contamination"));
@@ -1225,9 +1260,10 @@ async fn write_next_chapter(
     chapter_number: usize,
     progress_bar: &ProgressBar,
     enhanced_writer: Option<&EnhancedWriterIntegration>,
+    language: &str,
 ) -> Result<()> {
     // Legacy function - redirect to new section-based function
-    write_next_section(client, model, book, chapter_number, SectionType::Chapter, progress_bar, enhanced_writer).await
+    write_next_section(client, model, book, chapter_number, SectionType::Chapter, progress_bar, enhanced_writer, language).await
 }
 
 fn extract_section_outline(full_outline: &str, section_number: usize, section_type: &SectionType) -> Option<String> {
@@ -1766,12 +1802,21 @@ pub async fn interactive_mode() -> Result<()> {
 }
 
 pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> {
+    interactive_mode_with_settings(quiet_level, None).await
+}
+
+pub async fn interactive_mode_with_settings(quiet_level: QuietLevel, language: Option<String>) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
     
     // Initialize settings (reset to default each time)
     let mut settings = InteractiveSettings::default();
     settings.quiet_mode = quiet_level;
+    
+    // Set language from CLI if provided
+    if let Some(lang) = language {
+        settings.language = lang;
+    }
     
     'main: loop {
         println!("{}", console::style("🎭 Pundit - Interactive Content Creator").bold().magenta());
@@ -1783,6 +1828,9 @@ pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> 
         
         // Content type selection (each will offer new/continue options)
         'content: loop {
+            // Create language string to avoid lifetime issues
+            let language_option = format!("🌐 Language: {}", settings.language);
+            
             // Content type selection
             let content_types = vec![
                 // === CREATIVE WRITING ===
@@ -1820,6 +1868,7 @@ pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> 
                 
                 // === TOOLS ===
                 "📊 File Assessment - Analyze and give feedback on generated files",
+                &language_option,
                 "⚙️  Settings - Configure temporary session settings",
                 "❌ Exit",
             ];
@@ -1840,97 +1889,97 @@ pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> 
                 // === CREATIVE WRITING ===
                 0 => {
                     // Books - offer new/continue options
-                    interactive_book_mode().await
+                    interactive_book_mode(&settings).await
                 },
                 1 => {
                     // Children's book creation
-                    interactive_childrens_book_creation().await
+                    interactive_childrens_book_creation(&settings).await
                 },
                 2 => {
                     // Poetry creation
-                    interactive_poetry_creation().await
+                    interactive_poetry_creation(&settings).await
                 },
                 
                 // === SCREENWRITING & SCRIPTS ===
                 3 => {
                     // Screenplay creation
-                    interactive_screenplay_creation().await
+                    interactive_screenplay_creation(&settings).await
                 },
                 4 => {
                     // Stage play creation
-                    interactive_play_creation().await
+                    interactive_play_creation(&settings).await
                 },
                 5 => {
                     // TV script creation
-                    interactive_tv_creation().await
+                    interactive_tv_creation(&settings).await
                 },
                 6 => {
                     // Audio script creation
-                    interactive_audio_creation().await
+                    interactive_audio_creation(&settings).await
                 },
                 7 => {
                     // Game script creation
-                    interactive_game_creation().await
+                    interactive_game_creation(&settings).await
                 },
                 
                 // === EDUCATIONAL & REFERENCE ===
                 8 => {
                     // Educational lesson creation
-                    interactive_educational_lesson_creation().await
+                    interactive_educational_lesson_creation(&settings).await
                 },
                 9 => {
                     // Educational textbooks
-                    interactive_educational_textbook_creation().await
+                    interactive_educational_textbook_creation(&settings).await
                 },
                 10 => {
                     // Dictionary creation
-                    interactive_dictionary_creation().await
+                    interactive_dictionary_creation(&settings).await
                 },
                 
                 // === BUSINESS & PROFESSIONAL ===
                 11 => {
                     // Strategic planning
-                    interactive_strategic_doc_creation().await
+                    interactive_strategic_doc_creation(&settings).await
                 },
                 12 => {
                     // Document creation
-                    interactive_document_creation().await
+                    interactive_document_creation(&settings).await
                 },
                 13 => {
                     // Meeting documentation
-                    interactive_meeting_doc_creation().await
+                    interactive_meeting_doc_creation(&settings).await
                 },
                 14 => {
                     // Marketing content
-                    interactive_marketing_creation().await
+                    interactive_marketing_creation(&settings).await
                 },
                 
                 // === RESEARCH & TECHNICAL ===
                 15 => {
                     // Research & white papers
-                    interactive_research_doc_creation().await
+                    interactive_research_doc_creation(&settings).await
                 },
                 16 => {
                     // Technical documentation
-                    interactive_technical_doc_creation().await
+                    interactive_technical_doc_creation(&settings).await
                 },
                 17 => {
                     // Blog & SEO articles
-                    interactive_blog_creation().await
+                    interactive_blog_creation(&settings).await
                 },
                 18 => {
                     // Encyclopedia creation
-                    interactive_encyclopedia_creation().await
+                    interactive_encyclopedia_creation(&settings).await
                 },
                 
                 // === SPECIAL MODES ===
                 19 => {
                     // Freeform writing mode
-                    interactive_freeform_writing().await
+                    interactive_freeform_writing(&settings).await
                 },
                 20 => {
                     // Nonstop learning mode
-                    interactive_nonstop_learning_mode().await
+                    interactive_nonstop_learning_mode(&settings).await
                 },
                 
                 // === TOOLS ===
@@ -1939,6 +1988,10 @@ pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> 
                     interactive_file_assessment(&settings).await
                 },
                 22 => {
+                    // Language selection
+                    interactive_language_selection(&mut settings).await
+                },
+                23 => {
                     // Settings
                     interactive_settings_menu(&mut settings).await
                 },
@@ -1967,7 +2020,7 @@ pub async fn interactive_mode_with_quiet(quiet_level: QuietLevel) -> Result<()> 
     }
 }
 
-async fn interactive_screenplay_creation() -> Result<()> {
+async fn interactive_screenplay_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n🎬 Creating a Screenplay");
         println!("Let me ask you a few questions to create the perfect screenplay...\n");
@@ -2039,11 +2092,11 @@ async fn interactive_screenplay_creation() -> Result<()> {
         };
         
         // Create the screenplay
-        return write_screenplay(genre, style, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+        return write_screenplay(genre, style, length, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await;
     }
 }
 
-async fn interactive_play_creation() -> Result<()> {
+async fn interactive_play_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n🎭 Creating a Stage Play");
         println!("Let me ask you a few questions to create the perfect stage play...\n");
@@ -2144,11 +2197,11 @@ async fn interactive_play_creation() -> Result<()> {
         };
         
         // Create the stage play
-        return write_play(genre, style, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+        return write_play(genre, style, length, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await;
     }
 }
 
-async fn interactive_tv_creation() -> Result<()> {
+async fn interactive_tv_creation(settings: &InteractiveSettings) -> Result<()> {
     println!("\n📺 Creating a TV Script");
     println!("Let me ask you a few questions to create the perfect TV script...\n");
     
@@ -2264,7 +2317,7 @@ async fn interactive_tv_creation() -> Result<()> {
     println!("\n🎬 Creating {} {} episodes...", episodes, show_type_name(&show_type));
     
     // Create the TV script
-    write_tv_script(show_type, genre, style, episodes, None, model, None, use_local, "http://localhost:11434".to_string()).await
+    write_tv_script(show_type, genre, style, episodes, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await
 }
 
 fn show_type_name(show_type: &TvShowType) -> &'static str {
@@ -2284,7 +2337,7 @@ fn show_type_name(show_type: &TvShowType) -> &'static str {
     }
 }
 
-async fn interactive_audio_creation() -> Result<()> {
+async fn interactive_audio_creation(settings: &InteractiveSettings) -> Result<()> {
     println!("\n🎧 Creating an Audio Script");
     println!("Let me ask you a few questions to create the perfect audio content...\n");
     
@@ -2514,7 +2567,7 @@ async fn interactive_audio_creation() -> Result<()> {
     println!("\n🎙️ Creating {} minute {} script...", duration, audio_type_name(&audio_type));
     
     // Create the audio script
-    write_audio_script(audio_type, genre, style, duration, None, model, None, use_local, "http://localhost:11434".to_string()).await
+    write_audio_script(audio_type, genre, style, duration, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await
 }
 
 fn audio_type_name(audio_type: &AudioType) -> &'static str {
@@ -2529,7 +2582,7 @@ fn audio_type_name(audio_type: &AudioType) -> &'static str {
     }
 }
 
-async fn interactive_game_creation() -> Result<()> {
+async fn interactive_game_creation(settings: &InteractiveSettings) -> Result<()> {
     println!("\n🎮 Creating a Game Script");
     println!("Let me ask you a few questions to create the perfect interactive game script...\n");
     
@@ -2650,7 +2703,7 @@ async fn interactive_game_creation() -> Result<()> {
     }
     
     // Create the game script
-    write_game_script(genre, style, characters, None, model, None, use_local, "http://localhost:11434".to_string()).await
+    write_game_script(genre, style, characters, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await
 }
 
 fn game_genre_name(genre: &GameGenre) -> &'static str {
@@ -2669,7 +2722,7 @@ fn game_genre_name(genre: &GameGenre) -> &'static str {
     }
 }
 
-async fn interactive_document_creation() -> Result<()> {
+async fn interactive_document_creation(settings: &InteractiveSettings) -> Result<()> {
     println!("\n📄 Creating a Professional Document");
     println!("Let me ask you a few questions to create the perfect business or technical document...\n");
     
@@ -2907,7 +2960,7 @@ async fn interactive_document_creation() -> Result<()> {
              if include_examples { "with examples" } else { "" });
     
     // Create the document
-    write_document(doc_type, style, length, None, model, None, use_local, "http://localhost:11434".to_string()).await
+    write_document(doc_type, style, length, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await
 }
 
 fn document_type_name(doc_type: &DocumentType) -> &'static str {
@@ -2979,7 +3032,7 @@ fn sanitize_filename(filename: &str) -> String {
         .collect()
 }
 
-pub async fn narrate_mode() -> Result<()> {
+pub async fn narrate_mode(language: &str) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
     
@@ -3202,7 +3255,7 @@ pub async fn narrate_mode() -> Result<()> {
                         println!();
                         
                         // Start writing
-                        return write_book(genre, style, size, None, model, api_key, use_local, "http://localhost:11434".to_string()).await;
+                        return write_book(genre, style, size, None, model, api_key, use_local, "http://localhost:11434".to_string(), language).await;
                     }
                 }
             }
@@ -3232,6 +3285,7 @@ pub async fn continue_content(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -3399,14 +3453,15 @@ pub async fn continue_content(
             content.get_clean_context()
         );
         
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, section_type, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, section_type, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next section?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next section (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next section?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         
         progress_bar.inc(1);
@@ -3562,6 +3617,7 @@ pub async fn write_technical_doc(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -3640,14 +3696,15 @@ pub async fn write_technical_doc(
     // Write sections
     println!("\n📝 Writing technical documentation...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next section?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next section (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next section?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -3680,6 +3737,7 @@ pub async fn write_research_doc(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -3761,14 +3819,15 @@ pub async fn write_research_doc(
     // Write sections
     println!("\n📝 Writing research document...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next section?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next section (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next section?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -3854,6 +3913,7 @@ pub async fn write_poetry(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -3905,13 +3965,14 @@ pub async fn write_poetry(
     println!("📋 Generating poetry collection outline...");
     let outline_prompt = format!(
         "Create an outline for a collection of {} {} poems on the theme of {}.\n\
+        IMPORTANT: Write entirely in {} language.\n\
         Create exactly {} poem titles with brief descriptions.\n\
         Each poem should explore different aspects of the theme.\n\
         Format as:\n\
         Poem 1: [Title] - [Brief description]\n\
         Poem 2: [Title] - [Brief description]\n\
         ...\n\nOutline:",
-        poem_count, poetry_style_name(&style), theme, poem_count
+        poem_count, poetry_style_name(&style), theme, language, poem_count
     );
     
     let outline = match &client {
@@ -3933,14 +3994,15 @@ pub async fn write_poetry(
     // Write poems using enhanced poetry generation
     println!("\n📝 Writing poetry collection...");
     for poem_num in 1..=poem_count {
-        if let Err(e) = write_enhanced_poem(&client, &model, &mut content, poem_num, &style, &theme, &progress_bar).await {
+        if let Err(e) = write_enhanced_poem(&client, &model, &mut content, poem_num, &style, &theme, &progress_bar, language).await {
             eprintln!("❌ Error writing poem {}: {}", poem_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next poem?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next poem (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next poem?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -3973,6 +4035,7 @@ pub async fn write_interactive_fiction(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -4055,14 +4118,15 @@ pub async fn write_interactive_fiction(
     // Write chapters
     println!("\n📝 Writing interactive fiction...");
     for chapter_num in 1..=chapter_count {
-        if let Err(e) = write_next_section(&client, &model, &mut content, chapter_num, SectionType::Chapter, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, chapter_num, SectionType::Chapter, &progress_bar, None, language).await {
             eprintln!("❌ Error writing chapter {}: {}", chapter_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next chapter?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next chapter (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next chapter?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -4095,6 +4159,7 @@ pub async fn write_personal_writing(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -4175,14 +4240,15 @@ pub async fn write_personal_writing(
     // Write entries
     println!("\n📝 Writing personal entries...");
     for entry_num in 1..=entry_count {
-        if let Err(e) = write_next_section(&client, &model, &mut content, entry_num, SectionType::Section, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, entry_num, SectionType::Section, &progress_bar, None, language).await {
             eprintln!("❌ Error writing entry {}: {}", entry_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next entry?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next entry (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next entry?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -4264,6 +4330,7 @@ pub async fn write_marketing_content(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -4348,14 +4415,15 @@ pub async fn write_marketing_content(
     // Write sections
     println!("\n📝 Writing marketing content...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next section?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next section (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next section?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -4425,6 +4493,7 @@ pub async fn write_blog_content(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -4524,14 +4593,15 @@ pub async fn write_blog_content(
     // Write sections
     println!("\n📝 Writing blog content...");
     for section_num in 1..=sections {
-        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None).await {
+        if let Err(e) = write_next_section(&client, &model, &mut content, section_num, SectionType::Section, &progress_bar, None, language).await {
             eprintln!("❌ Error writing section {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next section?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next section (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next section?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         progress_bar.inc(1);
     }
@@ -5225,7 +5295,7 @@ fn create_segment_transition(prev_segment: &str, next_segment: &str) -> String {
 
 // Interactive creation functions for new content types
 
-async fn interactive_technical_doc_creation() -> Result<()> {
+async fn interactive_technical_doc_creation(settings: &InteractiveSettings) -> Result<()> {
     println!("\n🔬 Creating Technical Documentation");
     println!("Let me help you create professional technical documentation...\n");
     
@@ -5318,10 +5388,11 @@ async fn interactive_technical_doc_creation() -> Result<()> {
         api_key,
         use_local,
         ollama_url,
+        &settings.language,
     ).await
 }
 
-async fn interactive_research_doc_creation() -> Result<()> {
+async fn interactive_research_doc_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📊 Creating Research Document");
         println!("Let me help you create a professional research document...\n");
@@ -5469,11 +5540,12 @@ async fn interactive_research_doc_creation() -> Result<()> {
             api_key,
             use_local,
             ollama_url,
+            &settings.language,
         ).await;
     }
 }
 
-async fn interactive_poetry_creation() -> Result<()> {
+async fn interactive_poetry_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n🎨 Creating Poetry with Enhanced Emotional Anchors");
         println!("Let me help you create beautiful, emotionally resonant poetry...\n");
@@ -5598,7 +5670,7 @@ async fn interactive_poetry_creation() -> Result<()> {
     };
     
     println!("\n🚀 Generating {} poems with {} emotional feeling...", count, emotion);
-    println!("💫 Using enhanced prompting with emotional anchors and rhyme guidance...");
+    // println!("💫 Using enhanced prompting with emotional anchors and rhyme guidance...");
     
     return write_poetry(
         style,
@@ -5609,11 +5681,12 @@ async fn interactive_poetry_creation() -> Result<()> {
         api_key,
         use_local,
         ollama_url,
+        &settings.language,
     ).await;
     }
 }
 
-async fn interactive_marketing_creation() -> Result<()> {
+async fn interactive_marketing_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📝 Creating Marketing Content");
         println!("Let me help you create compelling marketing content...\n");
@@ -5775,11 +5848,12 @@ async fn interactive_marketing_creation() -> Result<()> {
             api_key,
             use_local,
             ollama_url,
+            &settings.language,
         ).await;
     }
 }
 
-async fn interactive_blog_creation() -> Result<()> {
+async fn interactive_blog_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📰 Creating Blog Content");
         println!("Let me help you create engaging blog content...\n");
@@ -5967,11 +6041,12 @@ async fn interactive_blog_creation() -> Result<()> {
             api_key,
             use_local,
             ollama_url,
+            &settings.language,
         ).await;
     }
 }
 
-async fn interactive_encyclopedia_creation() -> Result<()> {
+async fn interactive_encyclopedia_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n🏛️  Creating Encyclopedia");
         println!("Let me help you create comprehensive encyclopedia entries...\n");
@@ -6100,7 +6175,7 @@ async fn interactive_encyclopedia_creation() -> Result<()> {
     }
 }
 
-async fn interactive_strategic_doc_creation() -> Result<()> {
+async fn interactive_strategic_doc_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📋 Creating Strategic Planning Document");
         println!("Let me help you create a comprehensive strategic document...\n");
@@ -6265,7 +6340,7 @@ async fn interactive_strategic_doc_creation() -> Result<()> {
     }
 }
 
-async fn interactive_meeting_doc_creation() -> Result<()> {
+async fn interactive_meeting_doc_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📅 Creating Meeting Documentation");
         println!("Let me help you create professional meeting documentation...\n");
@@ -6460,6 +6535,7 @@ async fn write_enhanced_poem(
     style: &PoetryStyle,
     theme: &str,
     progress_bar: &ProgressBar,
+    language: &str,
 ) -> Result<()> {
     // Extract poem title from outline
     let poem_title = extract_poem_title_from_outline(&content.outline, poem_number)
@@ -6473,7 +6549,13 @@ async fn write_enhanced_poem(
     
     // Create enhanced poetry prompt with emotional anchors and rhyme hints
     let enhanced_prompt = EnhancedPoetryPrompt::new(theme, &emotion, poetry_style_str);
-    let prompt = enhanced_prompt.create_enhanced_prompt(&poem_title);
+    let base_prompt = enhanced_prompt.create_enhanced_prompt(&poem_title);
+    
+    // Add language instruction to the prompt
+    let prompt = format!(
+        "IMPORTANT: Write entirely in {} language. All text must be in {}.\n\n{}\n\nMUST write entirely in {} - do not use any other language.",
+        language, language, base_prompt, language
+    );
     
     // Generate the poem with enhanced prompting
     let generated_text = match client {
@@ -6745,7 +6827,7 @@ async fn generate_continuation(
 }
 
 // Dictionary creation with etymological features
-async fn interactive_dictionary_creation() -> Result<()> {
+async fn interactive_dictionary_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📖 Creating a Dictionary/Lexicon");
         println!("Let me help you create a comprehensive dictionary with etymological features...\n");
@@ -6845,7 +6927,7 @@ async fn interactive_dictionary_creation() -> Result<()> {
 }
 
 // Educational lesson creation with language learning support
-async fn interactive_educational_lesson_creation() -> Result<()> {
+async fn interactive_educational_lesson_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n🎓 Creating Educational Lesson");
         println!("Let me help you create engaging educational content with learning support...\n");
@@ -6986,7 +7068,7 @@ async fn interactive_educational_lesson_creation() -> Result<()> {
 }
 
 // Educational textbook creation for academic institutions
-async fn interactive_educational_textbook_creation() -> Result<()> {
+async fn interactive_educational_textbook_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📖 Creating Educational Textbook");
         println!("Let me help you create comprehensive academic textbooks for educational institutions...\n");
@@ -7193,7 +7275,7 @@ Structure the content to build knowledge progressively and engage {} students ef
 }
 
 // Children's book creation with age-appropriate content
-async fn interactive_childrens_book_creation() -> Result<()> {
+async fn interactive_childrens_book_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n👶 Creating Children's Book");
         println!("Let me help you create delightful, age-appropriate children's content...\n");
@@ -7328,7 +7410,7 @@ async fn interactive_childrens_book_creation() -> Result<()> {
         };
         
         // Create the children's book
-        return write_childrens_book(book_type, concept, age_group, length, None, model, None, use_local, "http://localhost:11434".to_string()).await;
+        return write_childrens_book(book_type, concept, age_group, length, None, model, None, use_local, "http://localhost:11434".to_string(), &settings.language).await;
     }
 }
 
@@ -7575,6 +7657,7 @@ async fn write_childrens_book(
     api_key: Option<String>,
     use_local: bool,
     ollama_url: String,
+    language: &str,
 ) -> Result<()> {
     let term = Term::stdout();
     term.clear_screen()?;
@@ -7659,7 +7742,7 @@ async fn write_childrens_book(
     for chapter_num in 1..=target_chapters {
         progress_bar.set_message(format!("Writing chapter {}", chapter_num));
         
-        if let Err(e) = write_childrens_chapter(&client, &model, &mut content, chapter_num, &concept, &book_type, &age_group, &progress_bar).await {
+        if let Err(e) = write_childrens_chapter(&client, &model, &mut content, chapter_num, &concept, &book_type, &age_group, &progress_bar, language).await {
             println!("\n❌ Error writing chapter {}: {}", chapter_num, e);
             break;
         }
@@ -7853,12 +7936,13 @@ pub async fn write_encyclopedia(
         
         if let Err(e) = write_encyclopedia_entry(&client, &model, &mut content, section_num, topic_title, &topic, &scope, &progress_bar).await {
             eprintln!("❌ Error writing entry {}: {}", section_num, e);
-            if !Confirm::new()
-                .with_prompt("Continue with next entry?")
-                .default(true)
-                .interact()? {
-                break;
-            }
+            // Auto-continue with next entry (quiet mode)
+            // if !Confirm::new()
+            //     .with_prompt("Continue with next entry?")
+            //     .default(true)
+            //     .interact()? {
+            //     break;
+            // }
         }
         
         progress_bar.inc(1);
@@ -8053,6 +8137,7 @@ async fn write_childrens_chapter(
     book_type: &crate::cli_types::ChildrensBookType,
     age_group: &crate::cli_types::ChildrensAgeGroup,
     _progress_bar: &ProgressBar,
+    language: &str,
 ) -> Result<()> {
     let writing_style = match age_group {
         crate::cli_types::ChildrensAgeGroup::Toddler => "very simple words, repetitive phrases, basic concepts",
@@ -8081,6 +8166,8 @@ async fn write_childrens_chapter(
     let prompt = format!(
         "Write chapter {} of a children's book about '{}'. 
         
+        IMPORTANT: Write entirely in {} language. All text, dialogue, and narration must be in {}.
+        
         Writing style: {}
         Book approach: {}
         
@@ -8093,9 +8180,10 @@ async fn write_childrens_chapter(
         - Have a clear beginning, middle, and end for this chapter
         - Advance the overall story while being complete on its own
         - Use positive, encouraging themes
+        - MUST write entirely in {} - do not use any other language
         
         Write approximately 300-800 words depending on the target age group.",
-        chapter_num, concept, writing_style, book_style, context
+        chapter_num, concept, language, language, writing_style, book_style, context, language
     );
     
     let chapter_content = match client {
@@ -9047,7 +9135,7 @@ fn get_science_chapter_title(science_subject: &str, chapter_num: usize, total_ch
 }
 
 // Helper function for book creation with new/continue options
-async fn interactive_book_mode() -> Result<()> {
+async fn interactive_book_mode(settings: &InteractiveSettings) -> Result<()> {
     loop {
         println!("\n📚 Book Creation Mode");
         println!("═══════════════════");
@@ -9069,7 +9157,7 @@ async fn interactive_book_mode() -> Result<()> {
         match mode_choice {
             0 => {
                 // Create new book - use existing narrate mode
-                return narrate_mode().await;
+                return narrate_mode(&settings.language).await;
             },
             1 => {
                 // Continue existing book - use continuation with book context
@@ -10757,7 +10845,7 @@ fn generate_general_opening_variety_guidance(section_type: &SectionType) -> Stri
 }
 
 // Freeform Writing Mode - New feature requested
-async fn interactive_freeform_writing() -> Result<()> {
+async fn interactive_freeform_writing(settings: &InteractiveSettings) -> Result<()> {
     println!("{}", console::style("✨ Freeform Writing Mode").bold().magenta());
     println!("═══════════════════════════════════════");
     println!();
@@ -11427,13 +11515,14 @@ async fn generate_educational_textbook_content(client: &AIClient, prompt: &str, 
 }
 
 // Helper functions for AI output validation and corruption prevention
-fn create_isolated_generation_prompt(content_type: &ContentType, genre: &str, context: &str, outline: &str, target_words: usize) -> String {
+fn create_isolated_generation_prompt(content_type: &ContentType, genre: &str, context: &str, outline: &str, target_words: usize, language: &str) -> String {
     // Create a clean, isolated prompt with clear structure
     format!(
         "===== CREATIVE WRITING TASK =====
 Content Type: {:?}
 Genre: {}
 Target Length: {} words
+Language: Write entirely in {}
 
 Context:
 {}
@@ -11448,11 +11537,13 @@ Writing Instructions:
 4. Do NOT reference this prompt or previous instructions
 5. Write in narrative prose only
 6. Maintain consistency with the provided context
+7. MUST write entirely in {} - do not use any other language
 
 ===== BEGIN WRITING =====",
-        content_type, genre, target_words, 
+        content_type, genre, target_words, language,
         sanitize_context_for_ai(context),
-        sanitize_outline_for_ai(outline)
+        sanitize_outline_for_ai(outline),
+        language
     )
 }
 
@@ -11842,7 +11933,7 @@ pub async fn enhanced_intelligent_writing_mode(
         let fully_enhanced_prompt = creativity_engine
             .enhance_prompt_with_creativity(&temporal_enhanced_prompt, &creative_plan)?;
 
-        println!("   📝 Enhanced prompt prepared ({} characters)", fully_enhanced_prompt.len());
+        // println!("   📝 Enhanced prompt prepared ({} characters)", fully_enhanced_prompt.len());
 
         // Generate chapter with resilience
         let generation_start = std::time::Instant::now();
@@ -12595,7 +12686,7 @@ pub async fn historical_persona_writing_mode(
             &selected_persona
         )?;
 
-        println!("   📝 Persona-enhanced prompt ready ({} characters)", fully_enhanced_prompt.len());
+        // println!("   📝 Persona-enhanced prompt ready ({} characters)", fully_enhanced_prompt.len());
 
         // Generate chapter content with persona influence
         let generation_start = std::time::Instant::now();
@@ -12859,7 +12950,7 @@ fn create_persona_chapter_prompt(
 }
 
 // Nonstop Learning Mode - Autonomous work generation with learning
-async fn interactive_nonstop_learning_mode() -> Result<()> {
+async fn interactive_nonstop_learning_mode(settings: &InteractiveSettings) -> Result<()> {
     println!("{}", console::style("🤖 Nonstop Learning Mode").bold().cyan());
     println!("═══════════════════════════════════════");
     println!();
@@ -12900,6 +12991,27 @@ async fn interactive_nonstop_learning_mode() -> Result<()> {
 
     println!("\n✅ Nonstop learning mode completed successfully!");
     Ok(())
+}
+
+// Language selection menu for interactive mode
+async fn interactive_language_selection(settings: &mut InteractiveSettings) -> Result<()> {
+    println!("\n🌐 Language Selection");
+    println!("════════════════════");
+    println!("Current language: {}", settings.language);
+    println!("Select a language for all content generation:");
+    println!();
+    
+    let selection = Select::new()
+        .with_prompt("Choose a language")
+        .items(AVAILABLE_LANGUAGES)
+        .default(0) // Default to English
+        .interact()?;
+    
+    let selected_language = AVAILABLE_LANGUAGES[selection];
+    settings.language = selected_language.to_string();
+    
+    // Return to main menu after language selection
+    Err(BackToMenu.into())
 }
 
 // Settings menu for interactive mode
@@ -13141,5 +13253,291 @@ async fn interactive_file_assessment(settings: &InteractiveSettings) -> Result<(
         if !continue_assess {
             return Ok(());
         }
+    }
+}
+
+/// Write content using the contemplative writing mode - reduces chatter and increases depth
+pub async fn write_contemplative_content(
+    content_type: String,
+    genre: Genre,
+    style: WritingStyle,
+    size: BookSize,
+    output: Option<PathBuf>,
+    model: String,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+    contemplation_depth: f32,
+    sections: u32,
+    show_meditation_state: bool,
+    language: &str,
+) -> Result<()> {
+    let term = Term::stdout();
+    term.clear_screen()?;
+    
+    println!("{}", console::style("🧘 Pundit - Contemplative Writer").bold().magenta());
+    println!("═══════════════════════════════════════════════════");
+    println!("✨ Writing from inner stillness and contemplative awareness");
+    println!();
+    
+    // Load configuration
+    let config = Config::load()?;
+    
+    // Create appropriate client
+    let client = if use_local {
+        println!("🏠 Using local Ollama server: {}", ollama_url);
+        let ollama_client = OllamaClient::new(ollama_url.clone())?;
+        AIClient::Ollama(ollama_client)
+    } else {
+        let effective_api_key = api_key.or_else(|| config.get_effective_api_key());
+        let hf_client = HuggingFaceClient::new(model.clone(), effective_api_key)?;
+        AIClient::HuggingFace(hf_client)
+    };
+    
+    // Initialize contemplative writing engine
+    let mut contemplative_engine = ContemplativeWriterEngine::new();
+    
+    // Create content based on type
+    let author = config.default_author.clone();
+    let title = format!("Contemplative {} - {}", content_type, genre);
+    
+    let mut content = match content_type.to_lowercase().as_str() {
+        "book" => Content::new(
+            title,
+            author,
+            format!("{:?}", genre),
+            format!("{:?}", style),
+            "A contemplative exploration".to_string(),
+            format!("{:?}", size),
+            Some(estimate_word_count(&size)),
+            sections as usize,
+            model.clone(),
+        ),
+        "poetry" => {
+            let mut poetry_content = Content::new(
+                format!("Contemplative Poetry - {}", genre),
+                author,
+                format!("{:?}", genre),
+                format!("{:?}", style),
+                "Poetic contemplation from inner silence".to_string(),
+                "Collection".to_string(),
+                Some(sections as usize * 100), // ~100 words per poem
+                sections as usize,
+                model.clone(),
+            );
+            poetry_content.content_type = ContentType::Poetry;
+            poetry_content
+        },
+        "screenplay" => {
+            let mut script_content = Content::new(
+                format!("Contemplative Screenplay - {}", genre),
+                author,
+                format!("{:?}", genre),
+                format!("{:?}", style),
+                "A contemplative cinematic exploration".to_string(),
+                "Feature".to_string(),
+                Some(sections as usize * 1000), // ~1000 words per scene
+                sections as usize,
+                model.clone(),
+            );
+            script_content.content_type = ContentType::Screenplay;
+            script_content
+        },
+        _ => Content::new(
+            title,
+            author,
+            format!("{:?}", genre),
+            format!("{:?}", style),
+            "Contemplative creative work".to_string(),
+            format!("{:?}", size),
+            Some(estimate_word_count(&size)),
+            sections as usize,
+            model.clone(),
+        ),
+    };
+    
+    // Begin contemplative session
+    contemplative_engine.begin_contemplative_session(&genre, &style, &content).await?;
+    
+    if show_meditation_state {
+        if let Some(status) = contemplative_engine.get_contemplative_status() {
+            println!("🧘‍♂️ {}", status);
+            println!();
+        }
+    }
+    
+    // Generate outline with contemplative approach
+    println!("📝 Creating contemplative outline...");
+    let outline_prompt = format!(
+        "From a place of inner stillness and contemplative awareness, create a thoughtful outline for a {} in the {} genre with {} style. 
+        
+        The outline should emerge from deep reflection rather than hurried planning. Each section should have a contemplative purpose and natural flow. Avoid rushed or chatty descriptions.
+        
+        Create {} sections that build contemplative depth throughout the work. Write in {} language if different from English.",
+        content_type, genre, style, sections, language
+    );
+    
+    let contemplative_outline = contemplative_engine.generate_contemplative_content(
+        &client,
+        &model,
+        &outline_prompt,
+        &content,
+        0,
+        800,
+        language,
+    ).await?;
+    
+    content.outline = contemplative_outline;
+    println!("✨ Contemplative outline created with inner wisdom");
+    println!();
+    
+    // Create progress bar
+    let progress_bar = create_content_progress_bar(&content);
+    progress_bar.set_message("Beginning contemplative writing journey...");
+    
+    // Write each section with contemplative depth
+    for section_number in 1..=sections {
+        // Brief contemplative pause between sections
+        if section_number > 1 {
+            contemplative_engine.begin_contemplative_session(&genre, &style, &content).await?;
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        }
+        
+        let section_desc = match content.content_type {
+            ContentType::Poetry => format!("poem {}", section_number),
+            ContentType::Screenplay => format!("scene {}", section_number),
+            _ => format!("section {}", section_number),
+        };
+        
+        progress_bar.set_message(format!("Writing {} with contemplative awareness...", section_desc));
+        
+        if show_meditation_state {
+            if let Some(status) = contemplative_engine.get_contemplative_status() {
+                println!("🧘 {}", status);
+            }
+        }
+        
+        // Create section-specific prompt
+        let section_prompt = format!(
+            "Continue the contemplative {} by writing {} {}. Draw from the outline and previous content, but let this section emerge from deep inner stillness rather than forced creativity.
+            
+            Target approximately {} words. Write with natural depth and avoid excessive explanation or chatty commentary. Let the content speak from its own truth.
+            
+            Previous context for continuity:
+            {}",
+            content_type,
+            section_desc,
+            section_number,
+            estimate_section_word_count(&content, section_number as usize),
+            content.get_clean_context()
+        );
+        
+        // Generate contemplative content
+        let section_content = contemplative_engine.generate_contemplative_content(
+            &client,
+            &model,
+            &section_prompt,
+            &content,
+            section_number as usize,
+            estimate_section_word_count(&content, section_number as usize),
+            language,
+        ).await?;
+        
+        // Add section to content
+        let section_type = match content.content_type {
+            ContentType::Poetry => SectionType::Section, // Poetry uses Section, not Poem
+            ContentType::Screenplay => SectionType::Scene,
+            _ => SectionType::Section,
+        };
+        
+        let section = Section::new(
+            section_number as usize,
+            format!("{} {}", section_type.to_string(), section_number),
+            section_content,
+            section_type,
+        );
+        
+        content.sections.push(section);
+        content.metadata.current_word_count = count_words(&content.to_text());
+        
+        progress_bar.inc(1);
+        
+        // Brief contemplative pause
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+    
+    progress_bar.finish_with_message("Contemplative writing journey complete ✨");
+    
+    // End contemplative session and display summary
+    let session_summary = contemplative_engine.end_contemplative_session();
+    
+    println!("\n🧘‍♂️ Contemplative Session Complete");
+    println!("═══════════════════════════════════");
+    println!("   Inner silence achieved: {:.1}%", session_summary.inner_silence_achieved * 100.0);
+    println!("   Contemplative depth: {:.1}%", session_summary.contemplative_depth_reached * 100.0);
+    println!("   Meditation state: {}", session_summary.meditation_state);
+    println!("   Total contemplative sessions: {}", session_summary.session_number);
+    println!();
+    
+    // Display final statistics
+    let final_word_count = count_words(&content.to_text());
+    println!("📊 Final Content Statistics:");
+    println!("   Total words: {}", final_word_count);
+    println!("   Sections completed: {}", sections);
+    println!("   Average words per section: {}", final_word_count / sections as usize);
+    println!("   Contemplative enhancement: ACTIVE");
+    println!();
+    
+    // Save to file
+    if let Some(output_path) = output {
+        let final_content = format!(
+            "# {}\n*Generated with Contemplative Writing Mode*\n*Inner Stillness Enhancement: {:.1}%*\n\n{}\n\n---\n*Created with Pundit Writer - Contemplative Mode*\n*Meditation Sessions: {} | Contemplative Depth: {:.1}%*",
+            content.title,
+            session_summary.inner_silence_achieved * 100.0,
+            content.to_text(),
+            session_summary.session_number,
+            session_summary.contemplative_depth_reached * 100.0
+        );
+        
+        std::fs::write(&output_path, final_content)?;
+        println!("💾 Contemplative work saved to: {:?}", output_path);
+    } else {
+        // Display a preview of the content
+        let preview = truncate_text(&content.to_text(), 500);
+        println!("📖 Content Preview:");
+        println!("───────────────────");
+        println!("{}", preview);
+        if content.to_text().len() > 500 {
+            println!("\n... (content truncated for display)");
+        }
+    }
+    
+    println!("\n✨ May this contemplative creation bring wisdom and clarity ✨");
+    
+    Ok(())
+}
+
+fn estimate_word_count(size: &BookSize) -> usize {
+    match size {
+        BookSize::ShortStory => 5000,
+        BookSize::Short => 35000,
+        BookSize::Medium => 65000,
+        BookSize::Large => 100000,
+        BookSize::VeryLarge => 160000,
+        BookSize::Epic => 225000,
+        BookSize::Unlimited => 65000, // Default to medium for unlimited
+    }
+}
+
+fn estimate_section_word_count(content: &Content, section_number: usize) -> usize {
+    let target_total = content.metadata.target_word_count.unwrap_or(50000);
+    let total_sections = content.metadata.target_sections;
+    let base_words_per_section = target_total / total_sections;
+    
+    // Vary section length slightly based on position
+    match section_number {
+        1 => (base_words_per_section as f32 * 0.8) as usize, // Shorter opening
+        n if n == total_sections => (base_words_per_section as f32 * 1.2) as usize, // Longer ending
+        _ => base_words_per_section,
     }
 }

@@ -107,7 +107,7 @@ impl FlowAwareWriter {
                 return self.generate_simplified_content(model, genre, style, max_tokens).await;
             }
         } else {
-            println!("⚠️ No intervention prompt generated - using gentle approach");
+            // println!("⚠️ No intervention prompt generated - using gentle approach");
             return self.try_gentle_nudge("", model, genre, style, max_tokens).await;
         }
     }
