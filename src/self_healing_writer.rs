@@ -340,27 +340,69 @@ impl SelfHealingWriter {
     fn categorize_error(&self, error_msg: &str) -> ErrorCategory {
         let msg_lower = error_msg.to_lowercase();
         
-        if msg_lower.contains("memory") || msg_lower.contains("overflow") {
+        // Memory-related errors
+        if msg_lower.contains("memory") || msg_lower.contains("overflow") || 
+           msg_lower.contains("out of memory") || msg_lower.contains("allocation failed") ||
+           msg_lower.contains("stack overflow") || msg_lower.contains("heap") {
             ErrorCategory::MemoryOverflow
-        } else if msg_lower.contains("creative") || msg_lower.contains("block") {
+        }
+        // Creative/generation blocks 
+        else if msg_lower.contains("creative") || msg_lower.contains("block") ||
+                msg_lower.contains("stuck") || msg_lower.contains("repetitive") ||
+                msg_lower.contains("uninspired") || msg_lower.contains("dry") ||
+                msg_lower.contains("empty response") || msg_lower.contains("no content generated") {
             ErrorCategory::CreativeBlock
-        } else if msg_lower.contains("temporal") || msg_lower.contains("continuity") {
+        }
+        // Temporal/continuity issues
+        else if msg_lower.contains("temporal") || msg_lower.contains("continuity") ||
+                msg_lower.contains("inconsistent") || msg_lower.contains("timeline") ||
+                msg_lower.contains("chronology") || msg_lower.contains("sequence") {
             ErrorCategory::TemporalInconsistency
-        } else if msg_lower.contains("character") {
+        }
+        // Character-related errors
+        else if msg_lower.contains("character") || msg_lower.contains("persona") ||
+                msg_lower.contains("voice") || msg_lower.contains("personality") {
             ErrorCategory::CharacterMismatch
-        } else if msg_lower.contains("plot") || msg_lower.contains("logic") {
+        }
+        // Plot/logic errors
+        else if msg_lower.contains("plot") || msg_lower.contains("logic") ||
+                msg_lower.contains("narrative") || msg_lower.contains("story") ||
+                msg_lower.contains("coherence") || msg_lower.contains("contradiction") {
             ErrorCategory::PlotLogicError
-        } else if msg_lower.contains("format") {
+        }
+        // Format errors
+        else if msg_lower.contains("format") || msg_lower.contains("structure") ||
+                msg_lower.contains("syntax") || msg_lower.contains("encoding") {
             ErrorCategory::FormatError
-        } else if msg_lower.contains("timeout") {
+        }
+        // Timeout/performance errors
+        else if msg_lower.contains("timeout") || msg_lower.contains("slow") ||
+                msg_lower.contains("performance") || msg_lower.contains("taking too long") ||
+                msg_lower.contains("timed out") || msg_lower.contains("deadline exceeded") {
             ErrorCategory::SystemTimeout
-        } else if msg_lower.contains("network") || msg_lower.contains("connection") {
+        }
+        // Network/connection errors
+        else if msg_lower.contains("network") || msg_lower.contains("connection") ||
+                msg_lower.contains("http") || msg_lower.contains("api") ||
+                msg_lower.contains("request failed") || msg_lower.contains("unreachable") ||
+                msg_lower.contains("connection refused") || msg_lower.contains("dns") {
             ErrorCategory::NetworkError
-        } else if msg_lower.contains("parse") || msg_lower.contains("parsing") {
+        }
+        // Parsing errors
+        else if msg_lower.contains("parse") || msg_lower.contains("parsing") ||
+                msg_lower.contains("json") || msg_lower.contains("yaml") ||
+                msg_lower.contains("xml") || msg_lower.contains("deserialize") ||
+                msg_lower.contains("malformed") || msg_lower.contains("invalid format") {
             ErrorCategory::ParsingError
-        } else if msg_lower.contains("content") && msg_lower.contains("filter") {
+        }
+        // Content filtering
+        else if msg_lower.contains("content") && msg_lower.contains("filter") ||
+                msg_lower.contains("blocked") || msg_lower.contains("censored") ||
+                msg_lower.contains("inappropriate") || msg_lower.contains("policy violation") {
             ErrorCategory::ContentFiltering
-        } else {
+        }
+        // Default - but now provide better fallback strategies
+        else {
             ErrorCategory::Unknown
         }
     }
@@ -376,21 +418,59 @@ impl SelfHealingWriter {
                 ResolutionStrategy::ApplyCreativeBlockRecovery,
                 ResolutionStrategy::ChangeWritingStyle,
                 ResolutionStrategy::UseAlternativePersona,
+                ResolutionStrategy::SimplifyLanguage,
             ],
             ErrorCategory::TemporalInconsistency => vec![
                 ResolutionStrategy::RefreshContext,
                 ResolutionStrategy::RestartFromCheckpoint,
                 ResolutionStrategy::ReduceComplexity,
             ],
+            ErrorCategory::CharacterMismatch => vec![
+                ResolutionStrategy::UseAlternativePersona,
+                ResolutionStrategy::RefreshContext,
+                ResolutionStrategy::ChangeWritingStyle,
+            ],
+            ErrorCategory::PlotLogicError => vec![
+                ResolutionStrategy::RestartFromCheckpoint,
+                ResolutionStrategy::RefreshContext,
+                ResolutionStrategy::ReduceComplexity,
+                ResolutionStrategy::SimplifyLanguage,
+            ],
+            ErrorCategory::FormatError => vec![
+                ResolutionStrategy::RestartFromCheckpoint,
+                ResolutionStrategy::SimplifyLanguage,
+                ResolutionStrategy::ReduceComplexity,
+            ],
             ErrorCategory::SystemTimeout => vec![
                 ResolutionStrategy::SplitIntoSmallerChunks,
                 ResolutionStrategy::RetryWithDelay,
                 ResolutionStrategy::SimplifyLanguage,
-            ],
-            _ => vec![
-                ResolutionStrategy::RetryWithDelay,
                 ResolutionStrategy::ReduceComplexity,
+            ],
+            ErrorCategory::NetworkError => vec![
+                ResolutionStrategy::RetryWithDelay,
+                ResolutionStrategy::SplitIntoSmallerChunks,
+                ResolutionStrategy::SkipAndContinue,
+            ],
+            ErrorCategory::ParsingError => vec![
                 ResolutionStrategy::RestartFromCheckpoint,
+                ResolutionStrategy::SimplifyLanguage,
+                ResolutionStrategy::ReduceComplexity,
+            ],
+            ErrorCategory::ContentFiltering => vec![
+                ResolutionStrategy::ChangeWritingStyle,
+                ResolutionStrategy::SimplifyLanguage,
+                ResolutionStrategy::UseAlternativePersona,
+                ResolutionStrategy::ReduceComplexity,
+            ],
+            // Enhanced Unknown fallback - try diverse strategies
+            ErrorCategory::Unknown => vec![
+                ResolutionStrategy::ReduceComplexity,     // High success rate
+                ResolutionStrategy::SplitIntoSmallerChunks, // Very high success rate
+                ResolutionStrategy::RetryWithDelay,       // Simple fallback
+                ResolutionStrategy::SimplifyLanguage,     // Often works
+                ResolutionStrategy::ChangeWritingStyle,   // Creative approach
+                ResolutionStrategy::RestartFromCheckpoint, // Fresh start
             ],
         }
     }
@@ -398,17 +478,123 @@ impl SelfHealingWriter {
     fn get_strategy_info(&self, strategy: &ResolutionStrategy, phase: &GenerationPhase) -> (f32, String) {
         match strategy {
             ResolutionStrategy::RetryWithDelay => (0.6, "Wait briefly and retry the operation".to_string()),
-            ResolutionStrategy::ReduceComplexity => (0.8, "Simplify the content complexity".to_string()),
-            ResolutionStrategy::SplitIntoSmallerChunks => (0.9, "Break into smaller, manageable pieces".to_string()),
-            ResolutionStrategy::ChangeWritingStyle => (0.7, "Switch to a different writing approach".to_string()),
+            ResolutionStrategy::ReduceComplexity => (0.85, "Simplify the content complexity and requirements".to_string()),
+            ResolutionStrategy::SplitIntoSmallerChunks => (0.92, "Break into smaller, manageable pieces".to_string()),
+            ResolutionStrategy::ChangeWritingStyle => (0.7, "Switch to a different writing approach or tone".to_string()),
+            ResolutionStrategy::SimplifyLanguage => (0.8, "Use simpler, more accessible language".to_string()),
             ResolutionStrategy::UseAlternativePersona => (0.75, "Try a different historical writer persona".to_string()),
-            ResolutionStrategy::ClearMemoryBuffer => (0.85, "Clear memory and start fresh".to_string()),
-            _ => (0.5, "Apply general recovery strategy".to_string()),
+            ResolutionStrategy::RestartFromCheckpoint => (0.65, "Return to last known good state and retry".to_string()),
+            ResolutionStrategy::SkipAndContinue => (0.4, "Skip problematic section and continue".to_string()),
+            ResolutionStrategy::SeekUserInput => (0.95, "Request user guidance for resolution".to_string()),
+            ResolutionStrategy::ApplyCreativeBlockRecovery => (0.8, "Use specialized creative block recovery techniques".to_string()),
+            ResolutionStrategy::RefreshContext => (0.7, "Refresh and reload the writing context".to_string()),
+            ResolutionStrategy::ClearMemoryBuffer => (0.85, "Clear memory buffers and start fresh".to_string()),
         }
     }
 
     fn generate_error_key(&self, phase: &GenerationPhase, error_msg: &str) -> String {
         format!("{}:{}", phase_to_string(phase), error_msg.chars().take(100).collect::<String>())
+    }
+
+    /// Intelligently prioritize strategies based on historical success and error type
+    pub fn get_prioritized_strategies(&self, error_msg: &str, phase: &GenerationPhase) -> Vec<ResolutionStrategy> {
+        let category = self.categorize_error(error_msg);
+        let error_key = self.generate_error_key(phase, error_msg);
+        
+        // Get default strategies for this error category
+        let mut strategies = self.get_default_strategies(&category, phase);
+        
+        // If we have historical data for this specific error, prioritize based on success
+        if let Some(pattern) = self.error_knowledge_base.get(&error_key) {
+            // Sort strategies by historical success rate
+            let mut successful_strategies = pattern.successful_resolution_strategies.clone();
+            let mut failed_strategies = pattern.failed_resolution_attempts.clone();
+            
+            // Prioritize: successful strategies first, then unused defaults, then failed strategies last
+            let mut prioritized = Vec::new();
+            
+            // 1. Previously successful strategies (highest priority)
+            for strategy in &successful_strategies {
+                if !prioritized.contains(strategy) {
+                    prioritized.push(strategy.clone());
+                }
+            }
+            
+            // 2. Default strategies that haven't been tried yet
+            for strategy in &strategies {
+                if !successful_strategies.contains(strategy) && 
+                   !failed_strategies.contains(strategy) &&
+                   !prioritized.contains(strategy) {
+                    prioritized.push(strategy.clone());
+                }
+            }
+            
+            // 3. Failed strategies (as last resort)
+            for strategy in &failed_strategies {
+                if !prioritized.contains(strategy) {
+                    prioritized.push(strategy.clone());
+                }
+            }
+            
+            // If we have any strategies, use them; otherwise fall back to defaults
+            if !prioritized.is_empty() {
+                return prioritized;
+            }
+        }
+        
+        // If no historical data, use intelligently sorted defaults
+        // Sort by estimated success rate (highest first)
+        strategies.sort_by(|a, b| {
+            let (rate_a, _) = self.get_strategy_info(a, phase);
+            let (rate_b, _) = self.get_strategy_info(b, phase);
+            rate_b.partial_cmp(&rate_a).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        
+        strategies
+    }
+
+    /// Record the success or failure of a strategy for future learning
+    pub fn record_strategy_outcome(&mut self, error_msg: &str, phase: &GenerationPhase, 
+                                 strategy: ResolutionStrategy, success: bool) {
+        let error_key = self.generate_error_key(phase, error_msg);
+        let category = self.categorize_error(error_msg);
+        
+        // Get or create the error pattern
+        let pattern = self.error_knowledge_base.entry(error_key.clone()).or_insert_with(|| {
+            ErrorPattern {
+                category,
+                phase: phase.clone(),
+                error_message: error_msg.to_string(),
+                context_snapshot: "".to_string(),
+                occurrence_count: 0,
+                first_seen: chrono::Utc::now(),
+                last_seen: chrono::Utc::now(),
+                successful_resolution_strategies: Vec::new(),
+                failed_resolution_attempts: Vec::new(),
+            }
+        });
+        
+        // Update the pattern
+        pattern.occurrence_count += 1;
+        pattern.last_seen = chrono::Utc::now();
+        
+        if success {
+            // Add to successful strategies if not already there
+            if !pattern.successful_resolution_strategies.contains(&strategy) {
+                pattern.successful_resolution_strategies.push(strategy.clone());
+            }
+            // Remove from failed if it was there (strategy worked this time)
+            pattern.failed_resolution_attempts.retain(|s| s != &strategy);
+            
+            // Update success metrics
+            self.success_metrics.auto_healed_errors += 1;
+        } else {
+            // Add to failed strategies if not already there and not in successful list
+            if !pattern.failed_resolution_attempts.contains(&strategy) && 
+               !pattern.successful_resolution_strategies.contains(&strategy) {
+                pattern.failed_resolution_attempts.push(strategy);
+            }
+        }
     }
 
     fn update_success_metrics(&mut self, was_successful: bool) {

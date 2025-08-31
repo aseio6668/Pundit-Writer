@@ -1514,42 +1514,101 @@ fn clean_generated_content(content: &str, expected_section_number: usize, sectio
     let mut cleaned_lines: Vec<&str> = Vec::new();
     let section_name = section_type_name(section_type);
     
-    for (i, line) in lines.iter().enumerate() {
+    for line in lines.iter() {
         let line = line.trim();
         
-        // Skip lines that incorrectly reference chapter numbers
-        if line.starts_with(&format!("{} ", section_name)) && i > 0 {
-            // If this is not the first line and contains chapter numbering, skip it
-            if line.contains(&format!("{} {}", section_name, expected_section_number)) {
-                continue;
-            }
-            // Skip any other chapter number references that don't match expected
-            if line.matches("Chapter ").count() > 0 || line.matches("CHAPTER ").count() > 0 {
-                continue;
-            }
+        // Skip empty lines at the beginning
+        if line.is_empty() && cleaned_lines.is_empty() {
+            continue;
         }
         
-        // Skip duplicate markdown headers with chapter numbers
-        if line.starts_with("##") && (line.contains("Chapter ") || line.contains("CHAPTER ")) {
-            // Only keep if it's exactly the expected chapter
-            if !line.contains(&format!("{} {}", section_name, expected_section_number)) {
-                continue;
-            }
-        }
-        
-        // Skip lines that are just repetitive chapter titles
-        if line.len() < 100 && line.contains(&format!("{} ", section_name)) && line.contains(":") {
-            // Check if this line appears to be a duplicated chapter title
-            let potential_chapter_num = extract_chapter_number_from_line(line);
-            if potential_chapter_num.is_some() && potential_chapter_num != Some(expected_section_number) {
-                continue;
-            }
+        // Skip ALL chapter header variations - be very aggressive
+        if should_skip_chapter_header_line(line, &section_name) {
+            continue;
         }
         
         cleaned_lines.push(line);
     }
     
-    cleaned_lines.join("\n").trim().to_string()
+    // Join and clean up any remaining issues
+    let result = cleaned_lines.join("\n").trim().to_string();
+    
+    // Final pass - remove any remaining chapter references that slipped through
+    remove_remaining_chapter_references(&result, expected_section_number, &section_name)
+}
+
+fn should_skip_chapter_header_line(line: &str, section_name: &str) -> bool {
+    let line_lower = line.to_lowercase();
+    let section_lower = section_name.to_lowercase();
+    
+    // Skip any line that looks like a chapter header - be very comprehensive
+    if line_lower.contains("chapter ") || line_lower.contains("chapter:") || 
+       line_lower.contains(&format!("{} ", section_lower)) {
+        
+        // Check for various chapter header patterns
+        if line_lower.starts_with("chapter ") ||
+           line_lower.starts_with("## chapter") ||
+           line_lower.starts_with("# chapter") ||
+           line_lower.starts_with(&format!("{} ", section_lower)) ||
+           (line.len() < 150 && line.contains(":") && (line_lower.contains("chapter ") || line_lower.contains(&section_lower))) ||
+           line_lower.matches("chapter ").count() > 0 ||
+           (line.trim().len() < 100 && line.contains(":")) {
+            return true;
+        }
+    }
+    
+    // Skip markdown headers that might contain chapter references
+    if (line.starts_with("#") || line.starts_with("=")) && 
+       (line_lower.contains("chapter") || line_lower.contains(&section_lower)) {
+        return true;
+    }
+    
+    // Skip standalone numbers or patterns like "17:" or "Chapter 17:"
+    if line.trim().len() < 50 && (
+        line.trim().ends_with(":") ||
+        line.trim().matches(":").count() == 1
+    ) && (line_lower.contains("chapter") || line.chars().any(|c| c.is_numeric())) {
+        return true;
+    }
+    
+    false
+}
+
+fn remove_remaining_chapter_references(content: &str, expected_section_number: usize, section_name: &str) -> String {
+    let mut result = content.to_string();
+    
+    // Remove patterns like "Chapter X: Chapter X" or "Chapter X:\nChapter X: Title"  
+    let chapter_patterns = vec![
+        format!("Chapter {}:\n Chapter {}", expected_section_number, expected_section_number),
+        format!("Chapter {}: Chapter {}", expected_section_number, expected_section_number),
+        format!("{} {}:\n {} {}", section_name, expected_section_number, section_name, expected_section_number),
+        format!("{} {}: {} {}", section_name, expected_section_number, section_name, expected_section_number),
+    ];
+    
+    for pattern in chapter_patterns {
+        result = result.replace(&pattern, "");
+    }
+    
+    // Remove any remaining standalone "Chapter X:" at the beginning
+    let lines: Vec<&str> = result.lines().collect();
+    let mut final_lines = Vec::new();
+    
+    for (i, line) in lines.iter().enumerate() {
+        let line_trimmed = line.trim();
+        
+        // Skip chapter headers at the beginning of content
+        if i < 3 && line_trimmed.len() < 100 && (
+            line_trimmed.starts_with("Chapter ") ||
+            line_trimmed.starts_with(&format!("{} ", section_name)) ||
+            (line_trimmed.contains(":") && line_trimmed.chars().filter(|c| c.is_alphabetic()).count() < 10)
+        ) {
+            continue;
+        }
+        
+        final_lines.push(*line);
+    }
+    
+    final_lines.join("\n").trim().to_string()
 }
 
 fn extract_chapter_number_from_line(line: &str) -> Option<usize> {
@@ -1562,6 +1621,112 @@ fn extract_chapter_number_from_line(line: &str) -> Option<usize> {
         }
     }
     None
+}
+
+fn extract_or_generate_chapter_title(chapter_num: usize, content: &str, genre: &str) -> String {
+    // Try to extract a meaningful title from the chapter content
+    let lines: Vec<&str> = content.lines().take(10).collect(); // Look at first 10 lines
+    
+    // Look for any remaining chapter title that might have been in the AI output
+    for line in &lines {
+        let line = line.trim();
+        if line.len() > 10 && line.len() < 100 && line.contains(':') {
+            if let Some(colon_pos) = line.find(':') {
+                let potential_title = line[colon_pos + 1..].trim();
+                if potential_title.len() > 5 && potential_title.len() < 80 && 
+                   !potential_title.contains('\n') && 
+                   potential_title.chars().any(|c| c.is_alphabetic()) {
+                    return potential_title.to_string();
+                }
+            }
+        }
+    }
+    
+    // If no title found, generate a simple descriptive title based on content
+    let first_paragraph = content.lines()
+        .filter(|line| !line.trim().is_empty())
+        .take(3)
+        .collect::<Vec<&str>>()
+        .join(" ");
+    
+    if first_paragraph.len() > 20 {
+        // Extract key words to create a title
+        let words: Vec<&str> = first_paragraph
+            .split_whitespace()
+            .filter(|word| word.len() > 3 && !is_common_word(word))
+            .take(4)
+            .collect();
+            
+        if !words.is_empty() {
+            let title = words.join(" ");
+            if title.len() > 5 && title.len() < 60 {
+                return capitalize_title(&title);
+            }
+        }
+    }
+    
+    // Fallback to generic titles based on genre and chapter number
+    generate_generic_chapter_title(chapter_num, genre)
+}
+
+fn is_common_word(word: &str) -> bool {
+    let common_words = ["the", "and", "but", "for", "are", "was", "were", "been", "have", "has", "had", 
+                       "will", "would", "could", "should", "that", "this", "with", "from", "they", "them",
+                       "than", "when", "where", "what", "which", "who", "how", "why", "about", "into",
+                       "through", "during", "before", "after", "above", "below", "between", "among"];
+    common_words.contains(&word.to_lowercase().as_str())
+}
+
+fn capitalize_title(title: &str) -> String {
+    title.split_whitespace()
+        .map(|word| {
+            let mut chars: Vec<char> = word.chars().collect();
+            if let Some(first) = chars.get_mut(0) {
+                *first = first.to_uppercase().next().unwrap_or(*first);
+            }
+            chars.into_iter().collect::<String>()
+        })
+        .collect::<Vec<String>>()
+        .join(" ")
+}
+
+fn generate_generic_chapter_title(chapter_num: usize, genre: &str) -> String {
+    let genre_lower = genre.to_lowercase();
+    
+    if genre_lower.contains("mystery") || genre_lower.contains("thriller") {
+        match chapter_num % 5 {
+            0 => "The Investigation Continues",
+            1 => "New Clues Emerge", 
+            2 => "Deeper Into Mystery",
+            3 => "Unexpected Revelations",
+            _ => "The Plot Thickens",
+        }.to_string()
+    } else if genre_lower.contains("fantasy") || genre_lower.contains("adventure") {
+        match chapter_num % 5 {
+            0 => "The Journey Continues",
+            1 => "New Challenges Await",
+            2 => "Unexpected Encounters", 
+            3 => "Ancient Secrets",
+            _ => "The Quest Unfolds",
+        }.to_string()
+    } else if genre_lower.contains("romance") {
+        match chapter_num % 4 {
+            0 => "Hearts Entwined",
+            1 => "Growing Closer",
+            2 => "Tender Moments",
+            _ => "Love's Journey",
+        }.to_string()
+    } else {
+        // Generic titles for any other genre
+        match chapter_num % 6 {
+            0 => "The Story Continues",
+            1 => "New Developments",
+            2 => "Unfolding Events",
+            3 => "Character Growth", 
+            4 => "Plot Development",
+            _ => "The Narrative Progresses",
+        }.to_string()
+    }
 }
 
 fn is_duplicate_content(new_content: &str, existing_sections: &[Section]) -> bool {
@@ -3092,16 +3257,56 @@ pub async fn narrate_mode(language: &str) -> Result<()> {
                 _ => Genre::Fiction,
             };
             
-            // Writing style selection
+            // Writing style selection - different for Non-Fiction
             'style_selection: loop {
-                let styles = vec![
-                    "Conversational", "Descriptive", "Narrative", "Creative", "Formal",
-                    "Casual", "Poetic", "Humorous", "Dramatic", "First Person", "Third Person",
-                    "← Back to genre selection"
-                ];
+                let (styles, is_nonfiction) = if genre == Genre::NonFiction {
+                    (vec![
+                        "Expository - Clear explanation and information",
+                        "Academic - Scholarly and research-based", 
+                        "Technical - Detailed instructions and procedures",
+                        "Reference - Encyclopedic and comprehensive",
+                        "Educational - Teaching-focused with examples",
+                        "How-To - Step-by-step guidance",
+                        "Scientific - Evidence-based and methodical",
+                        "Biographical Narrative - Life story with literary techniques",
+                        "Memoir Style - Personal experience as story",
+                        "Historical Narrative - History told as compelling story",
+                        "Personal Journey - Character development through experience",
+                        "Travelogue - Narrative exploration of places",
+                        "Narrative Journalism - News told as story",
+                        "Argumentative - Evidence-based persuasion",
+                        "Persuasive - Compelling advocacy with passion",
+                        "Opinion Piece - Personal viewpoint with evidence",
+                        "Manifesto - Bold declaration of beliefs",
+                        "Critical Analysis - In-depth examination and critique",
+                        "Policy Analysis - Systematic evaluation of policies",
+                        "Descriptive - Rich sensory language and imagery",
+                        "Travel Writing - Vivid sense of place and culture",
+                        "Food Writing - Sensory exploration of cuisine",
+                        "Nature Writing - Evocative environmental description",
+                        "Profile Writing - Character-driven portraits",
+                        "Creative Nonfiction - Literary artistry with facts",
+                        "Literary Journalism - Journalistic rigor with literary style",
+                        "Personal Essay - Reflective and introspective",
+                        "Lyrical Essay - Poetic and meditative",
+                        "Reflective Essay - Deep thought and insight",
+                        "Experimental Nonfiction - Innovative structure and approach",
+                        "← Back to genre selection"
+                    ], true)
+                } else {
+                    (vec![
+                        "Conversational", "Descriptive", "Narrative", "Creative", "Formal",
+                        "Casual", "Poetic", "Humorous", "Dramatic", "First Person", "Third Person",
+                        "← Back to genre selection"
+                    ], false)
+                };
                 
                 let style_idx = Select::new()
-                    .with_prompt("What writing style do you prefer?")
+                    .with_prompt(if is_nonfiction { 
+                        "What non-fiction writing style do you prefer?" 
+                    } else { 
+                        "What writing style do you prefer?" 
+                    })
                     .items(&styles)
                     .default(0)
                     .interact()?;
@@ -3110,19 +3315,56 @@ pub async fn narrate_mode(language: &str) -> Result<()> {
                     continue 'genre_selection; // Back to genre selection
                 }
                 
-                let style = match style_idx {
-                    0 => WritingStyle::Conversational,
-                    1 => WritingStyle::Descriptive,
-                    2 => WritingStyle::Narrative,
-                    3 => WritingStyle::Creative,
-                    4 => WritingStyle::Formal,
-                    5 => WritingStyle::Casual,
-                    6 => WritingStyle::Poetic,
-                    7 => WritingStyle::Humorous,
-                    8 => WritingStyle::Dramatic,
-                    9 => WritingStyle::FirstPerson,
-                    10 => WritingStyle::ThirdPerson,
-                    _ => WritingStyle::Conversational,
+                let style = if is_nonfiction {
+                    // Map non-fiction style selection
+                    match style_idx {
+                        0 => WritingStyle::Expository,
+                        1 => WritingStyle::Academic,
+                        2 => WritingStyle::Technical,
+                        3 => WritingStyle::Academic, // Reference maps to Academic
+                        4 => WritingStyle::Academic, // Educational maps to Academic
+                        5 => WritingStyle::Technical, // How-To maps to Technical
+                        6 => WritingStyle::Academic, // Scientific maps to Academic
+                        7 => WritingStyle::Narrative, // Biographical Narrative
+                        8 => WritingStyle::Narrative, // Memoir Style
+                        9 => WritingStyle::Narrative, // Historical Narrative
+                        10 => WritingStyle::Narrative, // Personal Journey
+                        11 => WritingStyle::Descriptive, // Travelogue
+                        12 => WritingStyle::Journalistic, // Narrative Journalism
+                        13 => WritingStyle::Persuasive, // Argumentative
+                        14 => WritingStyle::Persuasive, // Persuasive
+                        15 => WritingStyle::Persuasive, // Opinion Piece
+                        16 => WritingStyle::Persuasive, // Manifesto
+                        17 => WritingStyle::Academic, // Critical Analysis
+                        18 => WritingStyle::Academic, // Policy Analysis
+                        19 => WritingStyle::Descriptive, // Descriptive
+                        20 => WritingStyle::Descriptive, // Travel Writing
+                        21 => WritingStyle::Descriptive, // Food Writing
+                        22 => WritingStyle::Descriptive, // Nature Writing
+                        23 => WritingStyle::Descriptive, // Profile Writing
+                        24 => WritingStyle::Creative, // Creative Nonfiction
+                        25 => WritingStyle::Journalistic, // Literary Journalism
+                        26 => WritingStyle::Creative, // Personal Essay
+                        27 => WritingStyle::Poetic, // Lyrical Essay
+                        28 => WritingStyle::Creative, // Reflective Essay
+                        29 => WritingStyle::Experimental, // Experimental Nonfiction
+                        _ => WritingStyle::Expository,
+                    }
+                } else {
+                    match style_idx {
+                        0 => WritingStyle::Conversational,
+                        1 => WritingStyle::Descriptive,
+                        2 => WritingStyle::Narrative,
+                        3 => WritingStyle::Creative,
+                        4 => WritingStyle::Formal,
+                        5 => WritingStyle::Casual,
+                        6 => WritingStyle::Poetic,
+                        7 => WritingStyle::Humorous,
+                        8 => WritingStyle::Dramatic,
+                        9 => WritingStyle::FirstPerson,
+                        10 => WritingStyle::ThirdPerson,
+                        _ => WritingStyle::Conversational,
+                    }
                 };
                 
                 // Book size selection
@@ -8079,6 +8321,16 @@ async fn interactive_dictionary_arts_sciences_creation(settings: &InteractiveSet
         
         let subject_display = subject_areas[subject_idx].split(" - ").next().unwrap_or("Universal");
         
+        // Get custom title for the dictionary
+        let custom_title: String = Input::new()
+            .with_prompt("Title for your Dictionary of Arts and Sciences")
+            .default(format!("A Dictionary of Arts and Sciences: {}", subject_display))
+            .interact_text()?;
+        
+        if custom_title.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
         // Volume structure selection
         let volume_types = vec![
             "Single Volume - Complete work in one file (1,000-5,000 articles)",
@@ -8213,6 +8465,7 @@ async fn interactive_dictionary_arts_sciences_creation(settings: &InteractiveSet
         match create_dictionary_arts_sciences(
             &subject_area,
             subject_display,
+            &custom_title,
             &volume_structure,
             article_count,
             &cross_ref_level,
@@ -8305,6 +8558,7 @@ async fn write_encyclopedia_entry(
 async fn create_dictionary_arts_sciences(
     subject_area: &str,
     subject_display: &str, 
+    custom_title: &str,
     volume_structure: &str,
     article_count: usize,
     cross_ref_level: &str,
@@ -8335,7 +8589,7 @@ async fn create_dictionary_arts_sciences(
     progress_bar.set_prefix("📚 Generating");
     
     // Initialize the content structure
-    let title = format!("A Dictionary of Arts and Sciences: {}", subject_display);
+    let title = custom_title.to_string();
     let author = "Generated by Pundit Writer".to_string();
     let genre = "Reference".to_string();
     let style = "Academic".to_string();
@@ -8559,31 +8813,36 @@ async fn write_dictionary_article(
     );
     
     let prompt = format!(
-        "Write a comprehensive Dictionary of Arts and Sciences article about: {}
+        "You are creating a comprehensive Dictionary of Arts and Sciences article about: {}
 
         This is article {} following Ephraim Chambers' Cyclopædia model (1728).
         Subject focus: {}
+        
+        IMPORTANT: Write the complete article with FULL CONTENT, not just an outline or summary.
         
         Format the article exactly as:
         
         {topic_uppercase}
         
-        [Comprehensive definition and explanation in the style of an 18th-century learned work]
+        [Write multiple detailed paragraphs explaining the topic comprehensively]
         
         Requirements:
-        - Start with the HEADWORD in all capitals
-        - Provide etymology and definition
-        - Include historical development and significance  
-        - Explain practical applications and methodology
+        - Start with the HEADWORD in all capitals: {topic_uppercase}
+        - Write AT LEAST {target_words} words of detailed explanation
+        - Provide etymology and comprehensive definition
+        - Include historical development and significance in detail
+        - Explain practical applications and methodology thoroughly
         - Connect to broader subjects and related arts/sciences
         - {cross_ref_instruction}
-        - Use formal, scholarly language appropriate to the period
+        - Use formal, scholarly language appropriate to the 18th century
         - Include technical details and scientific principles where relevant
-        - Maintain alphabetical dictionary format while serving as systematic treatise
+        - Write multiple paragraphs of substantial content, NOT just bullet points
+        - Each paragraph should be at least 100 words long
         
-        Target length: {target_words} words.
+        DO NOT write just an outline or list. Write the complete article text with full explanations.
+        Target length: {target_words} words minimum.
         
-        Write in the learned, systematic style of Chambers' original Cyclopædia.",
+        Write in the learned, systematic style of Chambers' original Cyclopædia with complete paragraphs and detailed explanations.",
         topic, article_num, get_subject_description(subject_area), 
         topic_uppercase = topic, cross_ref_instruction = cross_ref_instruction, target_words = target_words
     );
@@ -8596,6 +8855,10 @@ async fn write_dictionary_article(
             ollama_client.generate_text(model, &prompt, (target_words * 2) as i32, 0.7).await?
         },
     };
+    
+    // Debug: Check what content was actually generated
+    println!("🔍 Generated article content for '{}' ({} chars):", topic, article_content.len());
+    println!("Preview: {}", article_content.chars().take(200).collect::<String>());
     
     let mut section = Section::new(article_num, topic.to_string(), article_content, SectionType::Section);
     section.word_count = count_words(&section.content);
@@ -11929,15 +12192,18 @@ async fn generate_freeform_content(
         Ok(_) => {
             println!("✅ Freeform content generated successfully!");
             
-            // Save the generated content
+            // Save the generated content to Documents folder
+            let default_dir = crate::config::get_default_output_dir();
+            std::fs::create_dir_all(&default_dir)?;
+            
             let filename = format!("freeform_{}_{}.txt", 
                 title.replace(" ", "_").to_lowercase(),
                 chrono::Local::now().format("%Y%m%d_%H%M%S")
             );
             
-            let output_path = std::path::Path::new(&filename);
+            let output_path = default_dir.join(filename);
             let content_text = content.to_text();
-            std::fs::write(output_path, content_text.as_bytes())?;
+            std::fs::write(&output_path, content_text.as_bytes())?;
             
             println!("📄 Content saved to: {}", output_path.display());
         },
@@ -12131,9 +12397,20 @@ async fn generate_educational_textbook_content(client: &AIClient, prompt: &str, 
 
 // Helper functions for AI output validation and corruption prevention
 fn create_isolated_generation_prompt(content_type: &ContentType, genre: &str, context: &str, outline: &str, target_words: usize, language: &str) -> String {
-    // Create a clean, isolated prompt with clear structure
-    format!(
-        "===== CREATIVE WRITING TASK =====
+    // Create a clean, isolated prompt with clear structure - different for non-fiction
+    let is_nonfiction = genre.to_lowercase().contains("non-fiction") || 
+                       genre.to_lowercase().contains("nonfiction") ||
+                       genre.to_lowercase().contains("expository") ||
+                       genre.to_lowercase().contains("academic") ||
+                       genre.to_lowercase().contains("educational") ||
+                       genre.to_lowercase().contains("argumentative") ||
+                       genre.to_lowercase().contains("persuasive");
+    
+    if is_nonfiction {
+        // Non-fiction specific prompting with strong constraints
+        let nonfiction_rules = get_nonfiction_writing_rules(genre);
+        format!(
+            "===== NON-FICTION EDUCATIONAL WRITING TASK =====
 Content Type: {:?}
 Genre: {}
 Target Length: {} words
@@ -12145,21 +12422,92 @@ Context:
 Writing Instructions:
 {}
 
-===== IMPORTANT RULES =====
+===== STRICT NON-FICTION REQUIREMENTS =====
+{}
+
+===== CRITICAL NON-FICTION CONSTRAINTS =====
+1. This is NON-FICTION - Do NOT create fictional characters, stories, or narratives
+2. Do NOT write dialogue between made-up characters
+3. Do NOT create fictional scenarios or examples with named characters
+4. Write ONLY factual, educational, informational content
+5. Use real-world examples, historical facts, or general principles
+6. Present information directly without fictional framing
+7. ABSOLUTELY FORBIDDEN: Do NOT include ANY chapter numbers, titles, or headers
+8. NEVER write \"Chapter X:\", \"Chapter X: Title\", \"## Chapter X\", or any formatting
+9. Start directly with the educational content - no introductions or headers
+10. Do NOT include any meta-commentary or explanations about the writing process
+11. Maintain scholarly credibility and factual accuracy throughout
+12. MUST write entirely in {} - do not use any other language
+
+REMEMBER: The system will add chapter formatting automatically. Your job is ONLY to write the educational content.
+
+===== WHAT TO WRITE =====
+Write informational content that directly addresses the topic without fictional elements.
+Use examples from real life, history, or established knowledge.
+Structure as educational exposition, not as a story with characters.
+
+===== BEGIN NON-FICTION WRITING =====",
+            content_type, genre, target_words, language,
+            sanitize_context_for_ai(context),
+            sanitize_outline_for_ai(outline),
+            nonfiction_rules,
+            language
+        )
+    } else {
+        // Original fiction prompting
+        format!(
+            "===== CREATIVE WRITING TASK =====
+Content Type: {:?}
+Genre: {}
+Target Length: {} words
+Language: Write entirely in {}
+
+Context:
+{}
+
+Writing Instructions:
+{}
+
+===== CRITICAL FORMATTING RULES =====
 1. Write ONLY the story content requested
-2. Do NOT include chapter numbers, titles, or headers in your output
-3. Do NOT include any meta-commentary or explanations
-4. Do NOT reference this prompt or previous instructions
-5. Write in narrative prose only
-6. Maintain consistency with the provided context
-7. MUST write entirely in {} - do not use any other language
+2. ABSOLUTELY FORBIDDEN: Do NOT include ANY chapter numbers, titles, or headers
+3. NEVER write \"Chapter X:\", \"Chapter X: Title\", \"## Chapter X\", or any chapter formatting
+4. Do NOT include any meta-commentary or explanations about the writing
+5. Do NOT reference this prompt or previous instructions
+6. Start directly with the narrative content - no introductions or headers
+7. Write in narrative prose only - no structural formatting
+8. Maintain consistency with the provided context
+9. MUST write entirely in {} - do not use any other language
+
+REMEMBER: The system will add chapter formatting automatically. Your job is ONLY to write the content.
 
 ===== BEGIN WRITING =====",
-        content_type, genre, target_words, language,
-        sanitize_context_for_ai(context),
-        sanitize_outline_for_ai(outline),
-        language
-    )
+            content_type, genre, target_words, language,
+            sanitize_context_for_ai(context),
+            sanitize_outline_for_ai(outline),
+            language
+        )
+    }
+}
+
+fn get_nonfiction_writing_rules(genre: &str) -> String {
+    let style = genre.to_lowercase();
+    
+    if style.contains("expository") || style.contains("educational") || style.contains("reference") {
+        "• Write direct explanations without fictional framing\n• Use real examples from history, science, or established knowledge\n• Define terms and concepts clearly\n• Organize information logically (cause/effect, chronological, categorical)\n• Maintain objective, educational tone\n• NO fictional characters or made-up scenarios".to_string()
+    } else if style.contains("academic") || style.contains("scientific") || style.contains("technical") {
+        "• Use formal scholarly language and structure\n• Support all claims with evidence and citations\n• Present research-based information\n• Include technical details and precise terminology\n• Write in third person objective voice\n• NO fictional examples or narrative elements".to_string()
+    } else if style.contains("narrative") || style.contains("memoir") || style.contains("biographical") || style.contains("personal journey") {
+        "• Tell true stories about real people and events\n• Use narrative structure but with factual content only\n• Include real dialogue and scenes from actual events\n• Focus on character development of real individuals\n• Create emotional connection through true experiences\n• NO invented characters or fictional scenarios".to_string()
+    } else if style.contains("argumentative") || style.contains("persuasive") || style.contains("opinion") || style.contains("manifesto") {
+        "• State your thesis or main argument clearly\n• Use real evidence, statistics, and case studies\n• Address actual counterarguments from real sources\n• Build logical progression of reasoning\n• Use persuasive but factual language\n• NO fictional examples or hypothetical characters".to_string()
+    } else if style.contains("descriptive") || style.contains("travel") || style.contains("nature") || style.contains("food") {
+        "• Describe real places, objects, or experiences vividly\n• Use sensory details from actual observations\n• Create atmosphere through factual description\n• Include specific, verifiable details\n• Write from direct experience or research\n• NO fictional locations or imaginary scenarios".to_string()
+    } else if style.contains("creative nonfiction") || style.contains("literary") || style.contains("essay") {
+        "• Use literary techniques with true content only\n• Combine artistic voice with factual accuracy\n• Include personal reflection on real experiences\n• Use metaphor and imagery grounded in reality\n• Balance creativity with truthfulness\n• NO fictional elements or invented scenarios".to_string()
+    } else {
+        "• Present factual information clearly and engagingly\n• Use real-world examples and case studies\n• Support statements with verifiable evidence\n• Write in appropriate tone for educational content\n• Focus on informing and educating readers\n• NO fictional characters, dialogue, or made-up stories".to_string()
+    }
 }
 
 fn sanitize_context_for_ai(context: &str) -> String {
@@ -12596,7 +12944,10 @@ pub async fn enhanced_intelligent_writing_mode(
         temporal_engine.update_after_chapter(chapter_num, &chapter_content)?;
 
         // Add to content buffer and full context
-        let formatted_chapter = format!("\n## Chapter {}\n\n{}\n", chapter_num, chapter_content);
+        // Generate a proper chapter title if possible, otherwise use just the number
+        let chapter_title = extract_or_generate_chapter_title(chapter_num, &chapter_content, &content.genre);
+        let formatted_chapter = format!("\n## Chapter {}: {}\n\n{}\n", 
+            chapter_num, chapter_title, chapter_content);
         content_buffer.push_str(&formatted_chapter);
         full_story_context.push_str(&formatted_chapter);
         

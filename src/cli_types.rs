@@ -165,6 +165,95 @@ pub enum WritingStyle {
     Classical,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Hash)]
+pub enum NonFictionWritingStyle {
+    // Expository Writing - explains, describes, informs
+    Expository,
+    Academic,
+    Technical,
+    Reference,
+    Educational,
+    HowTo,
+    Scientific,
+    
+    // Narrative Non-Fiction - uses storytelling techniques
+    BiographicalNarrative,
+    MemoirStyle,
+    HistoricalNarrative,
+    PersonalJourney,
+    Travelogue,
+    NarrativeJournalism,
+    
+    // Argumentative Writing - persuasive with evidence
+    Argumentative,
+    Persuasive,
+    OpinionPiece,
+    Manifesto,
+    CriticalAnalysis,
+    PolicyAnalysis,
+    
+    // Descriptive Writing - rich sensory language
+    Descriptive,
+    TravelWriting,
+    FoodWriting,
+    NatureWriting,
+    ProfileWriting,
+    
+    // Creative Non-Fiction - literary techniques with facts
+    CreativeNonfiction,
+    LiteraryJournalism,
+    PersonalEssay,
+    LyricalEssay,
+    ReflectiveEssay,
+    ExperimentalNonfiction,
+}
+
+impl std::fmt::Display for NonFictionWritingStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // Expository Writing
+            NonFictionWritingStyle::Expository => write!(f, "Expository - Clear explanation and information"),
+            NonFictionWritingStyle::Academic => write!(f, "Academic - Scholarly and research-based"),
+            NonFictionWritingStyle::Technical => write!(f, "Technical - Detailed instructions and procedures"),
+            NonFictionWritingStyle::Reference => write!(f, "Reference - Encyclopedic and comprehensive"),
+            NonFictionWritingStyle::Educational => write!(f, "Educational - Teaching-focused with examples"),
+            NonFictionWritingStyle::HowTo => write!(f, "How-To - Step-by-step guidance"),
+            NonFictionWritingStyle::Scientific => write!(f, "Scientific - Evidence-based and methodical"),
+            
+            // Narrative Non-Fiction
+            NonFictionWritingStyle::BiographicalNarrative => write!(f, "Biographical Narrative - Life story with literary techniques"),
+            NonFictionWritingStyle::MemoirStyle => write!(f, "Memoir Style - Personal experience as story"),
+            NonFictionWritingStyle::HistoricalNarrative => write!(f, "Historical Narrative - History told as compelling story"),
+            NonFictionWritingStyle::PersonalJourney => write!(f, "Personal Journey - Character development through experience"),
+            NonFictionWritingStyle::Travelogue => write!(f, "Travelogue - Narrative exploration of places"),
+            NonFictionWritingStyle::NarrativeJournalism => write!(f, "Narrative Journalism - News told as story"),
+            
+            // Argumentative Writing
+            NonFictionWritingStyle::Argumentative => write!(f, "Argumentative - Evidence-based persuasion"),
+            NonFictionWritingStyle::Persuasive => write!(f, "Persuasive - Compelling advocacy with passion"),
+            NonFictionWritingStyle::OpinionPiece => write!(f, "Opinion Piece - Personal viewpoint with evidence"),
+            NonFictionWritingStyle::Manifesto => write!(f, "Manifesto - Bold declaration of beliefs"),
+            NonFictionWritingStyle::CriticalAnalysis => write!(f, "Critical Analysis - In-depth examination and critique"),
+            NonFictionWritingStyle::PolicyAnalysis => write!(f, "Policy Analysis - Systematic evaluation of policies"),
+            
+            // Descriptive Writing
+            NonFictionWritingStyle::Descriptive => write!(f, "Descriptive - Rich sensory language and imagery"),
+            NonFictionWritingStyle::TravelWriting => write!(f, "Travel Writing - Vivid sense of place and culture"),
+            NonFictionWritingStyle::FoodWriting => write!(f, "Food Writing - Sensory exploration of cuisine"),
+            NonFictionWritingStyle::NatureWriting => write!(f, "Nature Writing - Evocative environmental description"),
+            NonFictionWritingStyle::ProfileWriting => write!(f, "Profile Writing - Character-driven portraits"),
+            
+            // Creative Non-Fiction
+            NonFictionWritingStyle::CreativeNonfiction => write!(f, "Creative Nonfiction - Literary artistry with facts"),
+            NonFictionWritingStyle::LiteraryJournalism => write!(f, "Literary Journalism - Journalistic rigor with literary style"),
+            NonFictionWritingStyle::PersonalEssay => write!(f, "Personal Essay - Reflective and introspective"),
+            NonFictionWritingStyle::LyricalEssay => write!(f, "Lyrical Essay - Poetic and meditative"),
+            NonFictionWritingStyle::ReflectiveEssay => write!(f, "Reflective Essay - Deep thought and insight"),
+            NonFictionWritingStyle::ExperimentalNonfiction => write!(f, "Experimental Nonfiction - Innovative structure and approach"),
+        }
+    }
+}
+
 impl std::fmt::Display for WritingStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
