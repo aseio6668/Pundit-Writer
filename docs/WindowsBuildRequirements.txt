@@ -1,0 +1,4 @@
+Windows Build Requirements:
+VS Studio 17 2022: 
+in vs studio 17 2022 install windows 11 SDK (highest version)
+cargo build should produce binary

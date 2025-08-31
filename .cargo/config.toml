@@ -1,0 +1,5 @@
+# For now, use the batch file approach since Windows SDK is not installed
+# Run: ./build_with_vs.bat instead of cargo build
+
+[alias]
+build-vs = "!./build_with_vs.bat"

@@ -211,6 +211,7 @@ impl HuggingFaceClient {
             ContentType::EducationalLesson => ("educational lesson", "module"),
             ContentType::ChildrensBook => ("children's book", "chapter"),
             ContentType::Encyclopedia => ("encyclopedia", "entry"),
+            ContentType::DictionaryArtsSciences => ("dictionary of arts and sciences", "article"),
         };
         
         let specific_instructions = match content_type {
@@ -241,6 +242,7 @@ impl HuggingFaceClient {
             ContentType::EducationalLesson => "Include learning objectives, examples, and practice exercises.",
             ContentType::ChildrensBook => "Include age-appropriate language, engaging characters, and positive themes.",
             ContentType::Encyclopedia => "Include comprehensive topics with definitions, history, and significance.",
+            ContentType::DictionaryArtsSciences => "Include alphabetical articles with extensive cross-references to related topics. Follow Chambers' Cyclopædia model with both dictionary entries and systematic treatise connections.",
         };
         
         let prompt = format!(
@@ -437,6 +439,17 @@ impl HuggingFaceClient {
                 - Significance and importance\n\
                 - Cross-references to related topics\n\
                 - Categories and classifications"
+            },
+            ContentType::DictionaryArtsSciences => {
+                "\n\nFormat as Dictionary of Arts and Sciences articles following Chambers' Cyclopædia model:\n\
+                - HEADWORD in all capitals as entry title\n\
+                - Comprehensive definition with etymology when relevant\n\
+                - Detailed explanations connecting to broader subjects\n\
+                - Extensive cross-references to related articles (marked with 'See' or 'See also')\n\
+                - Historical development and significance\n\
+                - Practical applications and examples\n\
+                - Scientific principles and methodologies where applicable\n\
+                - Connections between arts, sciences, and crafts"
             },
         };
         

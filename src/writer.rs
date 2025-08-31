@@ -1406,6 +1406,7 @@ fn get_clean_context_for_section(content: &Content, section_number: usize, secti
         ContentType::EducationalLesson => "Educational Lesson",
         ContentType::ChildrensBook => "Children's Book",
         ContentType::Encyclopedia => "Encyclopedia",
+        ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
     };
     
     let mut context = format!(
@@ -1731,6 +1732,7 @@ async fn output_content(content: &Content, output_path: Option<PathBuf>, config:
         ContentType::EducationalLesson => "educationallesson",
         ContentType::ChildrensBook => "childrensbook",
         ContentType::Encyclopedia => "encyclopedia",
+        ContentType::DictionaryArtsSciences => "dictionary_arts_sciences",
     };
     
     // Save as plain text with UTF-8 encoding
@@ -3438,7 +3440,7 @@ pub async fn continue_content(
         ContentType::MarketingAd | ContentType::PressRelease | ContentType::MediaKit |
         ContentType::BlogPost | ContentType::SeoArticle | ContentType::StrategicDoc |
         ContentType::PlanningDoc | ContentType::MeetingNotes | ContentType::MeetingSummary |
-        ContentType::Dictionary | ContentType::EducationalLesson | ContentType::Encyclopedia => SectionType::Section,
+        ContentType::Dictionary | ContentType::EducationalLesson | ContentType::Encyclopedia | ContentType::DictionaryArtsSciences => SectionType::Section,
         ContentType::ChildrensBook => SectionType::Chapter,
     };
     
@@ -3603,6 +3605,8 @@ fn extract_continuation_context(content: &str, content_type: ContentType) -> Str
             ContentType::EducationalLesson => "educational lesson",
             ContentType::ChildrensBook => "children's book",
             ContentType::Encyclopedia => "encyclopedia",
+            ContentType::DictionaryArtsSciences => "dictionary of arts and sciences",
+        ContentType::DictionaryArtsSciences => "dictionary_arts_sciences",
         },
         max_context_words,
         context_excerpt
@@ -5206,6 +5210,7 @@ fn get_enhanced_context_for_section(content: &Content, section_number: usize, se
         ContentType::EducationalLesson => "Educational Lesson",
         ContentType::ChildrensBook => "Children's Book",
         ContentType::Encyclopedia => "Encyclopedia",
+        ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
     };
     
     let mut context = format!(
@@ -6052,7 +6057,42 @@ async fn interactive_blog_creation(settings: &InteractiveSettings) -> Result<()>
 
 async fn interactive_encyclopedia_creation(settings: &InteractiveSettings) -> Result<()> {
     loop {
-        println!("\n🏛️  Creating Encyclopedia");
+        println!("\n🏛️  Encyclopedia Creation");
+        println!("Choose your encyclopedia type:\n");
+        
+        let encyclopedia_types = vec![
+            "📖 Standard Encyclopedia - General encyclopedia entries",
+            "🎓 Dictionary of Arts and Sciences - Chambers' Cyclopædia style with cross-references",
+            "← Back to Main Menu",
+        ];
+        
+        let type_idx = Select::new()
+            .with_prompt("Select encyclopedia type:")
+            .items(&encyclopedia_types)
+            .default(0)
+            .interact()?;
+        
+        match type_idx {
+            0 => {
+                // Standard Encyclopedia
+                interactive_standard_encyclopedia_creation(settings).await?;
+            },
+            1 => {
+                // Dictionary of Arts and Sciences
+                interactive_dictionary_arts_sciences_creation(settings).await?;
+            },
+            2 => {
+                // Back to main menu
+                return Err(BackToMenu.into());
+            },
+            _ => continue,
+        }
+    }
+}
+
+async fn interactive_standard_encyclopedia_creation(settings: &InteractiveSettings) -> Result<()> {
+    loop {
+        println!("\n📖  Creating Standard Encyclopedia");
         println!("Let me help you create comprehensive encyclopedia entries...\n");
         
         // Get topic
@@ -8003,6 +8043,201 @@ pub async fn write_encyclopedia(
     Ok(())
 }
 
+async fn interactive_dictionary_arts_sciences_creation(settings: &InteractiveSettings) -> Result<()> {
+    loop {
+        println!("\n🎓  Creating Dictionary of Arts and Sciences");
+        println!("Following the Chambers' Cyclopædia model with extensive cross-references...\n");
+        
+        // Subject area selection
+        let subject_areas = vec![
+            "Universal - Complete coverage of arts, sciences, and crafts",
+            "Natural Sciences - Physics, chemistry, astronomy, botany, zoology",
+            "Mathematical Sciences - Geometry, algebra, mechanics, optics", 
+            "Liberal Arts - Grammar, rhetoric, logic, ethics, metaphysics",
+            "Practical Arts - Architecture, agriculture, navigation, engineering",
+            "← Back",
+        ];
+        
+        let subject_idx = Select::new()
+            .with_prompt("What subject area should this dictionary cover?")
+            .items(&subject_areas)
+            .default(0)
+            .interact()?;
+        
+        if subject_idx == subject_areas.len() - 1 {
+            return Err(BackToMenu.into());
+        }
+        
+        let subject_area = match subject_idx {
+            0 => "universal",
+            1 => "natural_sciences",
+            2 => "mathematical_sciences",
+            3 => "liberal_arts", 
+            4 => "practical_arts",
+            _ => "universal",
+        }.to_string();
+        
+        let subject_display = subject_areas[subject_idx].split(" - ").next().unwrap_or("Universal");
+        
+        // Volume structure selection
+        let volume_types = vec![
+            "Single Volume - Complete work in one file (1,000-5,000 articles)",
+            "Multi-Volume Series - Separate volumes by letter ranges",
+            "Thematic Volumes - Separate books by subject area",
+            "← Back",
+        ];
+        
+        let volume_idx = Select::new()
+            .with_prompt("How should the dictionary be structured?")
+            .items(&volume_types)
+            .default(0)
+            .interact()?;
+        
+        if volume_idx == volume_types.len() - 1 {
+            continue;
+        }
+        
+        let volume_structure = match volume_idx {
+            0 => "single",
+            1 => "multi_volume",
+            2 => "thematic",
+            _ => "single",
+        }.to_string();
+        
+        // Number of articles
+        let default_articles = match &volume_structure[..] {
+            "single" => "500",
+            "multi_volume" => "200", // per volume
+            "thematic" => "300",
+            _ => "500",
+        };
+        
+        let articles_input: String = Input::new()
+            .with_prompt(&format!("How many articles would you like to generate{}?",
+                if volume_structure == "multi_volume" { " per volume" } else { "" }))
+            .default(default_articles.to_string())
+            .interact_text()?;
+            
+        if articles_input.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let article_count: usize = articles_input.parse().unwrap_or(500);
+        
+        // Cross-reference density
+        let cross_ref_levels = vec![
+            "Extensive - Maximum cross-references (Chambers' style)",
+            "Moderate - Balanced cross-referencing",
+            "Minimal - Basic cross-references only",
+            "← Back",
+        ];
+        
+        let cross_ref_idx = Select::new()
+            .with_prompt("What level of cross-referencing?")
+            .items(&cross_ref_levels)
+            .default(0)
+            .interact()?;
+        
+        if cross_ref_idx == cross_ref_levels.len() - 1 {
+            continue;
+        }
+        
+        let cross_ref_level = match cross_ref_idx {
+            0 => "extensive",
+            1 => "moderate", 
+            2 => "minimal",
+            _ => "extensive",
+        }.to_string();
+        
+        // Get output file path
+        let output_path: String = Input::new()
+            .with_prompt("Output file path (optional)")
+            .default(format!("{}_dictionary_arts_sciences.txt", 
+                subject_display.to_lowercase().replace(' ', "_")))
+            .interact_text()?;
+        
+        if output_path.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let output = if output_path.trim().is_empty() {
+            None
+        } else {
+            Some(output_path)
+        };
+        
+        // Get model preferences
+        let model_options = vec![
+            "Use local Ollama (recommended)",
+            "Use HuggingFace API",
+            "← Back",
+        ];
+        
+        let model_idx = Select::new()
+            .with_prompt("Choose your AI model source:")
+            .items(&model_options)
+            .default(0)
+            .interact()?;
+        
+        if model_idx == model_options.len() - 1 {
+            continue;
+        }
+        
+        let use_local = model_idx == 0;
+        
+        let (model, api_key, ollama_url) = if use_local {
+            let model: String = Input::new()
+                .with_prompt("Ollama model name")
+                .default("llama3.2".to_string())
+                .interact_text()?;
+            
+            if model.trim().to_lowercase() == "back" {
+                continue;
+            }
+            
+            (model, None, "http://localhost:11434".to_string())
+        } else {
+            let api_key: String = Input::new()
+                .with_prompt("HuggingFace API key")
+                .interact_text()?;
+            
+            if api_key.trim().to_lowercase() == "back" {
+                continue;
+            }
+            
+            let model = "gpt2".to_string();
+            (model, Some(api_key), String::new())
+        };
+        
+        // Create and generate the dictionary
+        match create_dictionary_arts_sciences(
+            &subject_area,
+            subject_display,
+            &volume_structure,
+            article_count,
+            &cross_ref_level,
+            output,
+            &model,
+            api_key,
+            use_local,
+            ollama_url,
+            &settings.language,
+        ).await {
+            Ok(_) => {
+                println!("\n🎉 Dictionary of Arts and Sciences creation completed!");
+                break;
+            }
+            Err(e) => {
+                println!("\n❌ Error creating dictionary: {}", e);
+                println!("Please check your settings and try again.\n");
+                continue;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 async fn write_encyclopedia_entry(
     client: &AIClient,
     model: &str,
@@ -8065,6 +8300,360 @@ async fn write_encyclopedia_entry(
     content.updated_at = chrono::Utc::now();
     
     Ok(())
+}
+
+async fn create_dictionary_arts_sciences(
+    subject_area: &str,
+    subject_display: &str, 
+    volume_structure: &str,
+    article_count: usize,
+    cross_ref_level: &str,
+    output: Option<String>,
+    model: &str,
+    api_key: Option<String>,
+    use_local: bool,
+    ollama_url: String,
+    language: &str,
+) -> Result<()> {
+    println!("\n🏗️  Building Dictionary of Arts and Sciences...");
+    
+    // Set up AI client
+    let client = if use_local {
+        AIClient::Ollama(OllamaClient::new(ollama_url)?)
+    } else {
+        AIClient::HuggingFace(HuggingFaceClient::new(model.to_string(), api_key)?)
+    };
+    
+    // Create progress bar
+    let progress_bar = ProgressBar::new(article_count as u64);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .template("{prefix:.cyan.bold} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} articles ({eta})")
+            .unwrap()
+            .progress_chars("█▉▊▋▌▍▎▏  ")
+    );
+    progress_bar.set_prefix("📚 Generating");
+    
+    // Initialize the content structure
+    let title = format!("A Dictionary of Arts and Sciences: {}", subject_display);
+    let author = "Generated by Pundit Writer".to_string();
+    let genre = "Reference".to_string();
+    let style = "Academic".to_string();
+    let premise = format!(
+        "A comprehensive dictionary of {} following the model of Ephraim Chambers' Cyclopædia, \
+        containing alphabetical articles with extensive cross-references connecting related topics \
+        in the arts, sciences, and crafts.", 
+        subject_display.to_lowercase()
+    );
+    
+    let mut content = Content::new_book(
+        title.clone(),
+        author,
+        genre,
+        style,
+        premise,
+        "comprehensive".to_string(),
+        Some(article_count * 2000),
+        article_count,
+        model.to_string(),
+    );
+    
+    content.content_type = crate::content::ContentType::DictionaryArtsSciences;
+    
+    // Generate dictionary outline with alphabetical organization
+    println!("📋 Creating systematic outline...");
+    let outline = generate_dictionary_outline(subject_area, article_count, cross_ref_level).await?;
+    content.outline = outline.clone();
+    
+    // Generate articles in alphabetical order
+    let article_topics = parse_dictionary_outline(&outline);
+    
+    for (i, topic) in article_topics.iter().enumerate().take(article_count) {
+        progress_bar.set_message(format!("Writing: {}", topic));
+        
+        write_dictionary_article(
+            &client,
+            model,
+            &mut content,
+            i + 1,
+            topic,
+            subject_area,
+            cross_ref_level,
+            &article_topics,
+            &progress_bar,
+        ).await?;
+        
+        progress_bar.inc(1);
+    }
+    
+    progress_bar.finish_with_message("Dictionary creation complete!");
+    
+    // Save the content
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let safe_title = content.title.chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' { c } else { '_' })
+        .collect::<String>()
+        .replace(' ', "_");
+        
+    // Handle output path properly
+    let output_path = match output {
+        Some(path) => std::path::PathBuf::from(path),
+        None => {
+            let default_dir = crate::config::get_default_output_dir();
+            default_dir.join(format!("{}.txt", safe_title))
+        }
+    };
+    
+    // Ensure parent directory exists
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
+    let base_filename = format!("dictionary_arts_sciences_{}_{}", safe_title, timestamp);
+    
+    // Create full paths for both formats
+    let txt_path = if output_path.is_dir() {
+        output_path.join(format!("{}.txt", base_filename))
+    } else if output_path.extension().is_some() {
+        output_path.clone()
+    } else {
+        output_path.with_extension("txt")
+    };
+    
+    let md_path = txt_path.with_extension("md");
+    
+    // Save in both formats with special Chambers-style formatting
+    std::fs::write(&txt_path, content.to_text())?;
+    std::fs::write(&md_path, content.to_markdown())?;
+    
+    println!("\n✅ Dictionary of Arts and Sciences completed successfully!");
+    println!("📄 Text file: {}", txt_path.display());
+    println!("📝 Markdown: {}", md_path.display());
+    println!("📊 Total articles: {}", content.sections.len());
+    println!("📝 Total words: {}", content.metadata.current_word_count);
+    println!("🔗 Cross-reference level: {}", cross_ref_level);
+    
+    Ok(())
+}
+
+async fn generate_dictionary_outline(subject_area: &str, article_count: usize, cross_ref_level: &str) -> Result<String> {
+    let subject_focus = match subject_area {
+        "universal" => "all branches of knowledge including natural philosophy, mathematics, liberal arts, and practical crafts",
+        "natural_sciences" => "natural philosophy, physics, chemistry, astronomy, botany, zoology, and related sciences",
+        "mathematical_sciences" => "pure and applied mathematics, geometry, algebra, mechanics, optics, and astronomical calculations", 
+        "liberal_arts" => "grammar, rhetoric, logic, ethics, metaphysics, theology, and classical learning",
+        "practical_arts" => "architecture, agriculture, navigation, engineering, manufacturing, and mechanical arts",
+        _ => "comprehensive coverage of arts, sciences, and practical knowledge",
+    };
+    
+    let cross_ref_description = match cross_ref_level {
+        "extensive" => "with extensive cross-references following Chambers' model",
+        "moderate" => "with selective cross-references to major related topics",
+        "minimal" => "with essential cross-references only",
+        _ => "with comprehensive cross-referencing",
+    };
+    
+    // Generate alphabetical topics based on subject area
+    let outline = format!(
+        "A DICTIONARY OF ARTS AND SCIENCES\n\
+        \n\
+        Covering {} {}, organized alphabetically for both dictionary lookup and systematic study.\n\
+        \n\
+        Target articles: {}\n\
+        Cross-referencing: {}\n\
+        \n\
+        ALPHABETICAL STRUCTURE:\n\
+        {}",
+        subject_focus, cross_ref_description, article_count, cross_ref_level,
+        generate_alphabetical_topics(subject_area, article_count)
+    );
+    
+    Ok(outline)
+}
+
+fn generate_alphabetical_topics(subject_area: &str, count: usize) -> String {
+    let mut topics = match subject_area {
+        "natural_sciences" => vec![
+            "ANATOMY", "ASTRONOMY", "BOTANY", "CHEMISTRY", "ELECTRICITY", "GEOLOGY", 
+            "MAGNETISM", "MECHANICS", "OPTICS", "PHYSICS", "ZOOLOGY"
+        ],
+        "mathematical_sciences" => vec![
+            "ALGEBRA", "ARITHMETIC", "CALCULUS", "GEOMETRY", "LOGARITHMS", 
+            "MATHEMATICS", "MECHANICS", "TRIGONOMETRY"
+        ],
+        "liberal_arts" => vec![
+            "ETHICS", "GRAMMAR", "LOGIC", "METAPHYSICS", "PHILOSOPHY", 
+            "RHETORIC", "THEOLOGY"
+        ],
+        "practical_arts" => vec![
+            "AGRICULTURE", "ARCHITECTURE", "CARPENTRY", "ENGINEERING", 
+            "NAVIGATION", "PRINTING", "SHIPBUILDING"
+        ],
+        _ => vec![
+            "ANATOMY", "ARCHITECTURE", "ASTRONOMY", "BOTANY", "CHEMISTRY", "ETHICS", 
+            "GEOMETRY", "GRAMMAR", "HISTORY", "LOGIC", "MATHEMATICS", "MECHANICS", 
+            "MEDICINE", "METAPHYSICS", "MUSIC", "NAVIGATION", "OPTICS", "PAINTING", 
+            "PHILOSOPHY", "PHYSICS", "POETRY", "PRINTING", "RHETORIC", "SCULPTURE", 
+            "THEOLOGY", "ZOOLOGY"
+        ],
+    };
+    
+    // Extend with related terms if more articles needed
+    if topics.len() < count {
+        let additional_terms = vec![
+            "ACOUSTICS", "AGRICULTURE", "ALCHEMY", "ARITHMETIC", "ASTROLOGY",
+            "CARPENTRY", "CHRONOLOGY", "COSMOGRAPHY", "DRAWING", "ELECTRICITY",
+            "ENGRAVING", "FORTIFICATION", "GEOGRAPHY", "GEOLOGY", "HERALDRY",
+            "HYDRAULICS", "JURISPRUDENCE", "MAGNETISM", "MINERALOGY", "MYTHOLOGY",
+            "PNEUMATICS", "SURVEYING", "TRIGONOMETRY"
+        ];
+        topics.extend(&additional_terms);
+    }
+    
+    topics.sort();
+    topics.truncate(count);
+    
+    topics.iter()
+        .enumerate()
+        .map(|(i, topic)| format!("{}. {}", i + 1, topic))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn parse_dictionary_outline(outline: &str) -> Vec<String> {
+    outline.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.contains(". ") && trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                trimmed.split(". ").nth(1).map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+async fn write_dictionary_article(
+    client: &AIClient,
+    model: &str,
+    content: &mut Content,
+    article_num: usize,
+    topic: &str,
+    subject_area: &str,
+    cross_ref_level: &str,
+    all_topics: &[String],
+    _progress_bar: &ProgressBar,
+) -> Result<()> {
+    let target_words = match cross_ref_level {
+        "extensive" => 1200,
+        "moderate" => 800,
+        "minimal" => 500,
+        _ => 800,
+    };
+    
+    // Get related topics for cross-referencing
+    let related_topics = get_related_topics(topic, all_topics, subject_area);
+    let cross_ref_instruction = format!(
+        "Include cross-references to related articles using 'See' or 'See also': {}",
+        related_topics.join(", ")
+    );
+    
+    let prompt = format!(
+        "Write a comprehensive Dictionary of Arts and Sciences article about: {}
+
+        This is article {} following Ephraim Chambers' Cyclopædia model (1728).
+        Subject focus: {}
+        
+        Format the article exactly as:
+        
+        {topic_uppercase}
+        
+        [Comprehensive definition and explanation in the style of an 18th-century learned work]
+        
+        Requirements:
+        - Start with the HEADWORD in all capitals
+        - Provide etymology and definition
+        - Include historical development and significance  
+        - Explain practical applications and methodology
+        - Connect to broader subjects and related arts/sciences
+        - {cross_ref_instruction}
+        - Use formal, scholarly language appropriate to the period
+        - Include technical details and scientific principles where relevant
+        - Maintain alphabetical dictionary format while serving as systematic treatise
+        
+        Target length: {target_words} words.
+        
+        Write in the learned, systematic style of Chambers' original Cyclopædia.",
+        topic, article_num, get_subject_description(subject_area), 
+        topic_uppercase = topic, cross_ref_instruction = cross_ref_instruction, target_words = target_words
+    );
+    
+    let article_content = match client {
+        AIClient::HuggingFace(hf_client) => {
+            hf_client.generate_text(&prompt, (target_words * 2) as u32, 0.7).await?
+        },
+        AIClient::Ollama(ollama_client) => {
+            ollama_client.generate_text(model, &prompt, (target_words * 2) as i32, 0.7).await?
+        },
+    };
+    
+    let mut section = Section::new(article_num, topic.to_string(), article_content, SectionType::Section);
+    section.word_count = count_words(&section.content);
+    let word_count = section.word_count;
+    content.sections.push(section);
+    content.metadata.current_word_count += word_count;
+    content.updated_at = chrono::Utc::now();
+    
+    Ok(())
+}
+
+fn get_subject_description(subject_area: &str) -> &str {
+    match subject_area {
+        "natural_sciences" => "natural philosophy and experimental sciences",
+        "mathematical_sciences" => "mathematical and computational sciences", 
+        "liberal_arts" => "liberal arts and classical learning",
+        "practical_arts" => "mechanical and practical arts",
+        _ => "universal knowledge encompassing all arts and sciences",
+    }
+}
+
+fn get_related_topics(topic: &str, all_topics: &[String], subject_area: &str) -> Vec<String> {
+    let topic_lower = topic.to_lowercase();
+    let mut related = Vec::new();
+    
+    // Define semantic relationships based on the topic
+    let related_map = match topic_lower.as_str() {
+        "anatomy" => vec!["MEDICINE", "SURGERY", "PHYSIOLOGY", "ZOOLOGY"],
+        "astronomy" => vec!["MATHEMATICS", "OPTICS", "GEOGRAPHY", "CHRONOLOGY"],
+        "botany" => vec!["AGRICULTURE", "MEDICINE", "CHEMISTRY", "ZOOLOGY"],
+        "chemistry" => vec!["MEDICINE", "MINERALOGY", "PHYSICS", "METALLURGY"],
+        "geometry" => vec!["MATHEMATICS", "ARCHITECTURE", "SURVEYING", "OPTICS"],
+        "mechanics" => vec!["PHYSICS", "MATHEMATICS", "ENGINEERING", "HYDRAULICS"],
+        "music" => vec!["MATHEMATICS", "ACOUSTICS", "POETRY", "HARMONY"],
+        "optics" => vec!["MATHEMATICS", "PHYSICS", "ASTRONOMY", "PERSPECTIVE"],
+        "philosophy" => vec!["LOGIC", "ETHICS", "METAPHYSICS", "THEOLOGY"],
+        "physics" => vec!["MATHEMATICS", "MECHANICS", "OPTICS", "ASTRONOMY"],
+        _ => vec![], // Will fall back to generic relationships
+    };
+    
+    // Add specific relationships
+    for related_topic in related_map {
+        if all_topics.contains(&related_topic.to_string()) {
+            related.push(related_topic.to_string());
+        }
+    }
+    
+    // Add some general relationships based on subject area
+    if related.len() < 3 {
+        for other_topic in all_topics {
+            if other_topic != topic && related.len() < 5 {
+                related.push(other_topic.clone());
+            }
+        }
+    }
+    
+    related.truncate(5); // Limit to 5 cross-references
+    related
 }
 
 async fn write_educational_section(
@@ -11307,8 +11896,34 @@ async fn generate_freeform_content(
     content.content_type = analysis.content_type.clone();
     content.metadata.target_word_count = Some(analysis.estimated_length);
 
+    // Ask user for model preference (like other functions)
+    let model_options = vec![
+        "Use local Ollama (recommended)",
+        "Use HuggingFace API",
+    ];
+    
+    let model_idx = Select::new()
+        .with_prompt("Choose your AI model source:")
+        .items(&model_options)
+        .default(0)
+        .interact()?;
+    
+    let use_local = model_idx == 0;
+    let (model_name, api_key) = if use_local {
+        let model: String = Input::new()
+            .with_prompt("Ollama model name")
+            .default("llama3.2".to_string())
+            .interact_text()?;
+        (model, None)
+    } else {
+        let api_key: String = Input::new()
+            .with_prompt("HuggingFace API key")
+            .interact_text()?;
+        ("microsoft/DialoGPT-medium".to_string(), Some(api_key))
+    };
+
     // Generate the content using the appropriate method based on content type
-    let result = generate_freeform_content_internal(&mut content, &enhanced_prompt, config).await;
+    let result = generate_freeform_content_internal(&mut content, &enhanced_prompt, &model_name, api_key, use_local).await;
 
     match result {
         Ok(_) => {
@@ -11337,23 +11952,20 @@ async fn generate_freeform_content(
 async fn generate_freeform_content_internal(
     content: &mut Content,
     prompt: &str,
-    _config: &Config,
+    model_name: &str,
+    api_key: Option<String>,
+    use_local: bool,
 ) -> anyhow::Result<()> {
     let target_sections = content.metadata.target_sections;
     let target_words = content.metadata.target_word_count.unwrap_or(1000);
     
-    // Create a simple client using the default pattern from existing code
-    let use_local = std::env::var("USE_LOCAL_OLLAMA").is_ok();
-    let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
-    
+    // Create client based on user choice
     let client = if use_local {
+        let ollama_url = "http://localhost:11434".to_string();
         let ollama_client = OllamaClient::new(ollama_url)?;
         AIClient::Ollama(ollama_client)
     } else {
-        // Try to get API key from environment or config
-        let api_key = std::env::var("HUGGINGFACE_API_KEY").ok();
-        let model = "microsoft/DialoGPT-medium".to_string(); // Default model
-        let hf_client = HuggingFaceClient::new(model, api_key)?;
+        let hf_client = HuggingFaceClient::new("gpt2".to_string(), api_key)?;
         AIClient::HuggingFace(hf_client)
     };
     
@@ -11379,8 +11991,7 @@ async fn generate_freeform_content_internal(
                 hf_client.generate_text(&section_prompt, max_tokens as u32, 0.8).await?
             },
             AIClient::Ollama(ollama_client) => {
-                let default_model = "llama2"; // Default model for Ollama
-                ollama_client.generate_text(default_model, &section_prompt, max_tokens as i32, 0.8).await?
+                ollama_client.generate_text(model_name, &section_prompt, max_tokens as i32, 0.8).await?
             }
         };
 

@@ -99,7 +99,7 @@ fn get_config_path() -> Result<PathBuf> {
     Ok(project_dirs.config_dir().join("config.json"))
 }
 
-fn get_default_output_dir() -> PathBuf {
+pub fn get_default_output_dir() -> PathBuf {
     // Try to use system Documents directory first
     if let Some(user_dirs) = directories::UserDirs::new() {
         if let Some(document_dir) = user_dirs.document_dir() {

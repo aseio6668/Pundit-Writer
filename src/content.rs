@@ -32,6 +32,7 @@ pub enum ContentType {
     EducationalLesson,
     ChildrensBook,
     Encyclopedia,
+    DictionaryArtsSciences,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,6 +385,7 @@ impl Content {
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
             ContentType::Encyclopedia => "Encyclopedia",
+            ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
         };
         
         let mut context = format!(
@@ -423,6 +425,7 @@ impl Content {
                 ContentType::EducationalLesson => "lessons",
                 ContentType::ChildrensBook => "chapters",
                 ContentType::Encyclopedia => "entries",
+                ContentType::DictionaryArtsSciences => "articles",
             };
             
             context.push_str(&format!("Previous {}:\n", section_name));
@@ -493,6 +496,7 @@ impl Content {
                 ContentType::EducationalLesson => "Lesson",
                 ContentType::ChildrensBook => "Chapter",
                 ContentType::Encyclopedia => "Entry",
+                ContentType::DictionaryArtsSciences => "Article",
             };
             
             context.push_str(&format!("{} {}: {}\n", section_type, section.number, section.title));
@@ -539,6 +543,7 @@ impl Content {
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
             ContentType::Encyclopedia => "Encyclopedia",
+            ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
         };
         
         let mut content_text = format!(
@@ -575,6 +580,7 @@ impl Content {
                 ContentType::EducationalLesson => self.format_educational_content(&section.content),
                 ContentType::ChildrensBook => self.format_childrens_content(&section.content),
                 ContentType::Encyclopedia => self.format_encyclopedia_entry(&section.content),
+                ContentType::DictionaryArtsSciences => self.format_arts_sciences_entry(&section.content),
                 _ => section.content.clone(),
             };
             
@@ -720,6 +726,80 @@ impl Content {
             .collect()
     }
     
+    pub fn format_arts_sciences_entry(&self, content: &str) -> String {
+        // Format Dictionary of Arts and Sciences entry with Chambers-style cross-references
+        let mut formatted = String::new();
+        
+        // Parse content to detect entry structure
+        let lines: Vec<&str> = content.split('\n').collect();
+        let mut in_definition = false;
+        let mut cross_refs = Vec::new();
+        
+        for line in lines {
+            let trimmed = line.trim();
+            
+            // Detect headword (usually first line or all caps)
+            if !in_definition && !trimmed.is_empty() {
+                // Format as headword
+                if trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c.is_ascii_punctuation()) {
+                    formatted.push_str(&format!("**{}**\n\n", trimmed));
+                } else {
+                    formatted.push_str(&format!("**{}**\n\n", trimmed.to_uppercase()));
+                }
+                in_definition = true;
+                continue;
+            }
+            
+            // Process definition content
+            if in_definition && !trimmed.is_empty() {
+                let mut processed_line = trimmed.to_string();
+                
+                // Detect and format cross-references (words that might be in the dictionary)
+                let words: Vec<&str> = trimmed.split_whitespace().collect();
+                for word in words {
+                    let clean_word = word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+                    
+                    // Common arts and sciences terms that would have cross-references
+                    let cross_ref_terms = [
+                        "anatomy", "astronomy", "botany", "chemistry", "geography", "geology", 
+                        "mathematics", "medicine", "physics", "optics", "mechanics", "hydraulics",
+                        "pneumatics", "electricity", "magnetism", "mineralogy", "zoology",
+                        "architecture", "painting", "sculpture", "music", "poetry", "rhetoric",
+                        "grammar", "logic", "ethics", "metaphysics", "theology", "jurisprudence",
+                        "agriculture", "navigation", "shipbuilding", "carpentry", "masonry",
+                        "printing", "engraving", "drawing", "perspective", "algebra", "geometry",
+                        "trigonometry", "calculus", "engineering", "surveying", "chronology", 
+                        "philosophy", "history", "mythology", "archaeology", "philology"
+                    ];
+                    
+                    if cross_ref_terms.contains(&clean_word.as_str()) && clean_word.len() > 3 && !cross_refs.contains(&clean_word) {
+                        cross_refs.push(clean_word.clone());
+                        // Mark cross-reference with italic formatting
+                        processed_line = processed_line.replace(word, &format!("*{}*", word));
+                    }
+                }
+                
+                formatted.push_str(&format!("{}\n", processed_line));
+            } else if !trimmed.is_empty() {
+                formatted.push_str(&format!("{}\n", line));
+            } else {
+                formatted.push('\n');
+            }
+        }
+        
+        // Add cross-reference section if any were found
+        if !cross_refs.is_empty() {
+            formatted.push_str("\n**See also:** ");
+            for (i, cross_ref) in cross_refs.iter().enumerate() {
+                if i > 0 { formatted.push_str(", "); }
+                formatted.push_str(&format!("*{}*", cross_ref.to_uppercase()));
+            }
+            formatted.push_str("\n");
+        }
+        
+        formatted
+    }
+    
     pub fn format_educational_content(&self, content: &str) -> String {
         // Educational lesson formatting with objectives
         content.lines()
@@ -787,6 +867,7 @@ impl Content {
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
             ContentType::Encyclopedia => "Encyclopedia",
+            ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
         };
         
         let mut markdown = format!(
@@ -1089,12 +1170,31 @@ impl StructuredOutline {
 impl StructuredPrompt {
     pub fn new_outline_generation(context: PromptContext, num_sections: usize) -> Self {
         let instructions = match context.content_type {
-            ContentType::Book => vec![
-                "Create a detailed book outline with compelling character arcs".to_string(),
-                format!("Generate exactly {} chapters with clear progression", num_sections),
-                "Include character development and plot twists".to_string(),
-                "Ensure each chapter advances the story meaningfully".to_string(),
-            ],
+            ContentType::Book => {
+                // Check if this is non-fiction based on genre
+                let is_nonfiction = context.genre.to_lowercase().contains("non-fiction") ||
+                                  context.genre.to_lowercase().contains("nonfiction") ||
+                                  matches!(context.genre.as_str(), "Philosophy" | "Science" | "Technology" | 
+                                          "Business" | "History" | "Biography" | "Self-Help" | "Health" | 
+                                          "Fitness" | "Cooking" | "Travel" | "Politics" | "Economics" | 
+                                          "Sociology" | "Psychology" | "Education" | "Religion");
+                
+                if is_nonfiction {
+                    vec![
+                        "Create a detailed non-fiction book outline with logical progression of ideas".to_string(),
+                        format!("Generate exactly {} chapters with clear educational flow", num_sections),
+                        "Include key concepts, examples, and practical applications".to_string(),
+                        "Ensure each chapter builds knowledge systematically without fictional narratives".to_string(),
+                    ]
+                } else {
+                    vec![
+                        "Create a detailed book outline with compelling character arcs".to_string(),
+                        format!("Generate exactly {} chapters with clear progression", num_sections),
+                        "Include character development and plot twists".to_string(),
+                        "Ensure each chapter advances the story meaningfully".to_string(),
+                    ]
+                }
+            },
             ContentType::TechnicalDoc => vec![
                 "Create a logical technical documentation structure".to_string(),
                 format!("Generate exactly {} sections with clear learning progression", num_sections),
@@ -1130,21 +1230,49 @@ impl StructuredPrompt {
         }
     }
 
-    pub fn new_section_generation(context: PromptContext, section_outline: &str, target_words: usize) -> Self {
-        let instructions = vec![
-            format!("Generate a detailed {} section", context.content_type.to_string()),
-            format!("Target length: {} words", target_words),
-            "Follow the provided outline exactly".to_string(),
-            "Maintain consistent style and voice".to_string(),
-            "Include specific details and examples".to_string(),
-        ];
+    pub fn new_section_generation(context: PromptContext, _section_outline: &str, target_words: usize) -> Self {
+        // Check if this is non-fiction based on genre
+        let is_nonfiction = context.genre.to_lowercase().contains("non-fiction") ||
+                          context.genre.to_lowercase().contains("nonfiction") ||
+                          matches!(context.genre.as_str(), "Philosophy" | "Science" | "Technology" | 
+                                  "Business" | "History" | "Biography" | "Self-Help" | "Health" | 
+                                  "Fitness" | "Cooking" | "Travel" | "Politics" | "Economics" | 
+                                  "Sociology" | "Psychology" | "Education" | "Religion");
+        
+        let instructions = if is_nonfiction {
+            vec![
+                format!("Generate a detailed {} section with informative content", context.content_type.to_string()),
+                format!("Target length: {} words", target_words),
+                "Follow the provided outline exactly".to_string(),
+                "Maintain consistent educational tone and voice".to_string(),
+                "Include specific concepts, examples, and practical insights".to_string(),
+                "Focus on knowledge transfer rather than fictional storytelling".to_string(),
+            ]
+        } else {
+            vec![
+                format!("Generate a detailed {} section", context.content_type.to_string()),
+                format!("Target length: {} words", target_words),
+                "Follow the provided outline exactly".to_string(),
+                "Maintain consistent style and voice".to_string(),
+                "Include specific details and examples".to_string(),
+            ]
+        };
 
-        let constraints = vec![
-            format!("Must be approximately {} words", target_words),
-            "Must match the requested section exactly".to_string(),
-            "No chapter numbers or section markers in output".to_string(),
-            "Maintain narrative flow and engagement".to_string(),
-        ];
+        let constraints = if is_nonfiction {
+            vec![
+                format!("Must be approximately {} words", target_words),
+                "Must match the requested section exactly".to_string(),
+                "No chapter numbers or section markers in output".to_string(),
+                "Maintain logical flow and educational engagement without fictional elements".to_string(),
+            ]
+        } else {
+            vec![
+                format!("Must be approximately {} words", target_words),
+                "Must match the requested section exactly".to_string(),
+                "No chapter numbers or section markers in output".to_string(),
+                "Maintain narrative flow and engagement".to_string(),
+            ]
+        };
 
         Self {
             template_type: PromptType::SectionGeneration,
@@ -1209,6 +1337,106 @@ impl StructuredPrompt {
         prompt.push_str("RESPONSE:\n");
         prompt
     }
+
+    // Chambers-style formatting with cross-references and structured layout
+    pub fn format_chambers_style_entry(&self, content: &str) -> String {
+        let mut formatted = String::new();
+        
+        // Parse content to detect entry structure
+        let lines: Vec<&str> = content.split('\n').collect();
+        let mut in_definition = false;
+        let mut cross_refs = Vec::new();
+        
+        for line in lines {
+            let trimmed = line.trim();
+            
+            // Detect headword (usually first line or all caps)
+            if !in_definition && !trimmed.is_empty() {
+                // Format as headword
+                if trimmed.chars().all(|c| c.is_uppercase() || c.is_whitespace() || c.is_ascii_punctuation()) {
+                    formatted.push_str(&format!("**{}**\n\n", trimmed));
+                } else {
+                    formatted.push_str(&format!("**{}**\n\n", trimmed.to_uppercase()));
+                }
+                in_definition = true;
+                continue;
+            }
+            
+            // Process definition content
+            if in_definition && !trimmed.is_empty() {
+                let mut processed_line = trimmed.to_string();
+                
+                // Detect and format cross-references (words that might be in the dictionary)
+                let words: Vec<&str> = trimmed.split_whitespace().collect();
+                for word in words {
+                    let clean_word = word.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase();
+                    
+                    // Common arts and sciences terms that would have cross-references
+                    let cross_ref_terms = [
+                        "anatomy", "astronomy", "botany", "chemistry", "geography", "geology", 
+                        "mathematics", "medicine", "physics", "optics", "mechanics", "hydraulics",
+                        "pneumatics", "electricity", "magnetism", "mineralogy", "zoology",
+                        "architecture", "painting", "sculpture", "music", "poetry", "rhetoric",
+                        "grammar", "logic", "ethics", "metaphysics", "theology", "jurisprudence",
+                        "agriculture", "navigation", "shipbuilding", "carpentry", "masonry",
+                        "printing", "engraving", "drawing", "perspective", "algebra", "geometry",
+                        "trigonometry", "calculus", "engineering", "surveying", "chronology", 
+                        "philosophy", "history", "mythology", "archaeology", "philology"
+                    ];
+                    
+                    if cross_ref_terms.contains(&clean_word.as_str()) && clean_word.len() > 3 && !cross_refs.contains(&clean_word) {
+                        cross_refs.push(clean_word.clone());
+                        // Mark cross-reference with italic formatting
+                        processed_line = processed_line.replace(word, &format!("*{}*", word));
+                    }
+                }
+                
+                formatted.push_str(&format!("{}\n", processed_line));
+            } else if !trimmed.is_empty() {
+                formatted.push_str(&format!("{}\n", line));
+            } else {
+                formatted.push('\n');
+            }
+        }
+        
+        // Add cross-reference section if any were found
+        if !cross_refs.is_empty() {
+            formatted.push_str("\n**See also:** ");
+            for (i, cross_ref) in cross_refs.iter().enumerate() {
+                if i > 0 { formatted.push_str(", "); }
+                formatted.push_str(&format!("*{}*", cross_ref.to_uppercase()));
+            }
+            formatted.push_str("\n");
+        }
+        
+        formatted
+    }
+
+    // Determine if a term should be cross-referenced in a Dictionary of Arts and Sciences
+    pub fn is_cross_referenceable_term(&self, word: &str) -> bool {
+        // Arts and Sciences terms that would typically appear as separate entries
+        let cross_ref_terms = [
+            // Sciences
+            "anatomy", "astronomy", "botany", "chemistry", "geography", "geology", 
+            "mathematics", "medicine", "physics", "optics", "mechanics", "hydraulics",
+            "pneumatics", "electricity", "magnetism", "mineralogy", "zoology",
+            
+            // Arts and Crafts
+            "architecture", "painting", "sculpture", "music", "poetry", "rhetoric",
+            "grammar", "logic", "ethics", "metaphysics", "theology", "jurisprudence",
+            "agriculture", "navigation", "shipbuilding", "carpentry", "masonry",
+            "printing", "engraving", "drawing", "perspective",
+            
+            // Mathematical and Technical
+            "algebra", "geometry", "trigonometry", "calculus", "engineering",
+            "surveying", "chronology", "calendar", "horology",
+            
+            // Classical subjects
+            "philosophy", "history", "mythology", "archaeology", "philology"
+        ];
+        
+        cross_ref_terms.contains(&word) && word.len() > 3
+    }
 }
 
 impl std::fmt::Display for SectionType {
@@ -1256,6 +1484,7 @@ impl std::fmt::Display for ContentType {
             ContentType::EducationalLesson => "Educational Lesson",
             ContentType::ChildrensBook => "Children's Book",
             ContentType::Encyclopedia => "Encyclopedia",
+            ContentType::DictionaryArtsSciences => "Dictionary of Arts and Sciences",
         };
         write!(f, "{}", s)
     }
