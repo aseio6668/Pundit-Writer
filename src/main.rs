@@ -420,11 +420,12 @@ async fn main() -> Result<()> {
             }
         },
         
-        Commands::Encyclopedia { topic, scope, entries, output, model, api_key, local, ollama_url } => {
+        Commands::Encyclopedia { topic, description, scope, entries, output, model, api_key, local, ollama_url } => {
             let output_path = output.map(|p| p.to_string_lossy().to_string());
             
             crate::writer::write_encyclopedia(
                 topic,
+                description,
                 scope,
                 entries,
                 output_path,

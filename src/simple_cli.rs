@@ -331,6 +331,9 @@ pub enum Commands {
         #[arg(short, long, help = "Main topic or subject area")]
         topic: String,
         
+        #[arg(short, long, help = "Detailed description of the encyclopedia's focus, content, and scope")]
+        description: Option<String>,
+        
         #[arg(short, long, help = "Scope of coverage (comprehensive, specialized, concise)", default_value = "comprehensive")]
         scope: String,
         

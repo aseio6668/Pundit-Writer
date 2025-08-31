@@ -14,6 +14,10 @@ use crate::temporal_engine::{TemporalEngine, ChapterTemporalContext};
 use crate::advanced_creativity_engine::{AdvancedCreativityEngine, CreativeChapterPlan};
 use crate::intelligent_progression_tracker::{IntelligentProgressionTracker, ChapterGenerationContext, GenerationMetrics, InterruptionType};
 use crate::self_healing_writer::{SelfHealingWriter, GenerationPhase, PausePoint, RetryOption};
+use crate::master_intelligence_system::{MasterIntelligenceSystem, SuperIntelligentOutput};
+use crate::advanced_learning_system::AdvancedLearningSystem;
+use crate::neural_creativity_enhancer::NeuralCreativityEnhancer;
+use crate::cognitive_writing_engine::CognitiveWritingEngine;
 use crate::nonstop_learning_mode::{NonstopLearningMode, setup_nonstop_learning_config};
 use crate::enhanced_writer_integration::EnhancedWriterIntegration;
 use crate::silent_mind_writer::SilentMindWriter;
@@ -6346,6 +6350,22 @@ async fn interactive_standard_encyclopedia_creation(settings: &InteractiveSettin
             return Err(BackToMenu.into());
         }
         
+        // Get description (optional)
+        let description_input: String = Input::new()
+            .with_prompt("Provide a description of the encyclopedia's focus, content, and scope (optional, press Enter to skip)")
+            .default("".to_string())
+            .interact_text()?;
+        
+        if description_input.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let description = if description_input.trim().is_empty() {
+            None
+        } else {
+            Some(description_input.trim().to_string())
+        };
+        
         // Scope selection
         let scopes = vec![
             "Comprehensive - Deep, detailed coverage of all aspects",
@@ -6450,6 +6470,7 @@ async fn interactive_standard_encyclopedia_creation(settings: &InteractiveSettin
         println!("\n🚀 Generating encyclopedia...");
         return write_encyclopedia(
             topic,
+            description,
             scope,
             entries_count,
             output,
@@ -8111,6 +8132,7 @@ async fn write_dictionary_section(
 // Encyclopedia creation with structured knowledge entries
 pub async fn write_encyclopedia(
     topic: String,
+    description: Option<String>,
     scope: String, // "comprehensive", "specialized", or "concise"  
     entries: usize,
     output: Option<String>,
@@ -8122,6 +8144,9 @@ pub async fn write_encyclopedia(
     let term = Term::stdout();
     let _ = term.write_line(&console::style("🏛️  Encyclopedia Writer").bold().to_string());
     let _ = term.write_line(&format!("Topic: {}", topic));
+    if let Some(ref desc) = description {
+        let _ = term.write_line(&format!("Description: {}", desc));
+    }
     let _ = term.write_line(&format!("Scope: {}", scope));
     let _ = term.write_line(&format!("Total Entries: {}", entries));
     
@@ -8137,13 +8162,39 @@ pub async fn write_encyclopedia(
         }
     };
     
-    // Create encyclopedia content
+    // Initialize complete AI learning and intelligence systems
+    println!("🧠 Initializing Advanced AI Learning Systems for Encyclopedia...");
+    let master_intelligence = MasterIntelligenceSystem::new();
+    let mut self_healing_writer = SelfHealingWriter::new();
+    let mut advanced_learning = AdvancedLearningSystem::new();
+    let mut neural_creativity = NeuralCreativityEnhancer::new();
+    let cognitive_engine = CognitiveWritingEngine::new();
+    
+    // Configure for encyclopedia generation with enhanced learning
+    self_healing_writer.learning_enabled = true;
+    self_healing_writer.auto_retry_attempts = 3;
+    // advanced_learning.enable_deep_analysis(true); // Method doesn't exist
+    
+    println!("   ✨ Master Intelligence System: ACTIVE");
+    println!("   🔄 Self-Healing Writer: ENABLED");
+    println!("   📚 Advanced Learning System: ENABLED");
+    println!("   🎨 Neural Creativity Enhancer: ACTIVE");
+    println!("   🧠 Cognitive Writing Engine: ACTIVE");
+    println!("   🌟 Enhanced Encyclopedia Generation: READY");
+    
+    // Create encyclopedia content with description
+    let premise = if let Some(ref desc) = description {
+        format!("Encyclopedia of {}: {}", topic, desc)
+    } else {
+        format!("Comprehensive {} covering key topics and concepts", topic.to_lowercase())
+    };
+    
     let mut content = Content::new(
         format!("Encyclopedia of {}", topic),
         "Pundit AI".to_string(),
         topic.clone(),
         "encyclopedic".to_string(),
-        format!("Comprehensive {} covering key topics and concepts", topic.to_lowercase()),
+        premise,
         scope.clone(),
         Some(entries * 500), // ~500 words per entry
         entries,
@@ -8152,24 +8203,28 @@ pub async fn write_encyclopedia(
     
     content.content_type = crate::content::ContentType::Encyclopedia;
     
-    // Generate encyclopedia outline
+    // Generate encyclopedia outline with description context
+    let description_context = description.as_ref()
+        .map(|d| format!("Description: {}\n\n", d))
+        .unwrap_or_default();
+    
     let outline_prompt = format!(
-        "Create an encyclopedia outline for '{}' with exactly {} entries. 
+        "Create an encyclopedia outline for '{}' with exactly {} entries.
         
-        Format as a numbered list of topics that should be covered.
-        Scope: {}
+        {}Scope: {}
+        
+        IMPORTANT: Respond with ONLY a simple numbered list of topics. Do not include descriptions, explanations, or additional text.
+        
+        Format exactly like this:
+        1. [Topic Name]
+        2. [Topic Name]
+        3. [Topic Name]
         
         Each entry should be a distinct, important topic that deserves its own encyclopedia entry.
+        Focus on topics that align with the described scope and purpose of this encyclopedia.
         
-        Example format:
-        1. Main Topic Overview
-        2. Historical Development
-        3. Key Principles
-        4. Notable Examples
-        5. Modern Applications
-        
-        Generate {} distinct encyclopedia topics:",
-        topic, entries, scope, entries
+        Generate exactly {} distinct encyclopedia topics:",
+        topic, entries, description_context, scope, entries
     );
     
     let outline = match &client {
@@ -8190,10 +8245,30 @@ pub async fn write_encyclopedia(
             let line = line.trim();
             if line.is_empty() { return None; }
             
-            // Remove numbering (1. 2. etc.) and clean up
-            if let Some(topic) = line.split('.').nth(1) {
-                Some(topic.trim().to_string())
-            } else if !line.chars().next().unwrap_or(' ').is_ascii_digit() {
+            // Skip common non-topic lines
+            if line.to_lowercase().contains("outline") || 
+               line.to_lowercase().contains("entries:") ||
+               line.to_lowercase().contains("format") ||
+               line.to_lowercase().contains("example") ||
+               line.to_lowercase().contains("description:") ||
+               line.len() < 3 {
+                return None;
+            }
+            
+            // Parse numbered entries (1. Topic Name)
+            if let Some(captures) = line.split('.').collect::<Vec<_>>().get(1) {
+                if let Ok(_) = line.split('.').next().unwrap_or("").trim().parse::<u32>() {
+                    let parsed_topic = captures.trim().to_string();
+                    if !parsed_topic.is_empty() {
+                        return Some(parsed_topic);
+                    }
+                }
+            }
+            
+            // Handle lines that might be topics without numbers
+            if !line.chars().next().unwrap_or(' ').is_ascii_digit() && 
+               !line.contains(':') &&  // Skip description lines
+               line.len() > 5 {  // Must be substantial
                 Some(line.to_string())
             } else {
                 None
@@ -8220,7 +8295,7 @@ pub async fn write_encyclopedia(
         let section_num = index + 1;
         progress_bar.set_message(format!("Writing: {}", topic_title));
         
-        if let Err(e) = write_encyclopedia_entry(&client, &model, &mut content, section_num, topic_title, &topic, &scope, &progress_bar).await {
+        if let Err(e) = write_encyclopedia_entry(&client, &model, &mut content, section_num, topic_title, &topic, &scope, description.as_ref(), &master_intelligence, &mut self_healing_writer, &mut advanced_learning, &mut neural_creativity, &cognitive_engine, &progress_bar).await {
             eprintln!("❌ Error writing entry {}: {}", section_num, e);
             // Auto-continue with next entry (quiet mode)
             // if !Confirm::new()
@@ -8243,30 +8318,37 @@ pub async fn write_encyclopedia(
         .collect::<String>()
         .replace(' ', "_");
         
-    // Handle output path properly
+    // Always use Documents folder for output like other modes
+    let default_dir = crate::config::get_default_output_dir();
+    std::fs::create_dir_all(&default_dir)?;
+    
+    let base_filename = format!("encyclopedia_{}_{}", safe_title, timestamp);
+    
     let output_path = match output {
-        Some(path) => std::path::PathBuf::from(path),
+        Some(path) => {
+            let user_path = std::path::PathBuf::from(path);
+            if user_path.is_absolute() {
+                user_path
+            } else {
+                // If user provides relative path, put it in Documents folder
+                default_dir.join(user_path)
+            }
+        },
         None => {
-            // Use current working directory
-            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            // Default to Documents folder with generated filename
+            default_dir.join(format!("{}.txt", base_filename))
         }
     };
     
-    // Ensure the directory exists
+    // Ensure parent directory exists for user-specified paths
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     
-    let base_filename = format!("encyclopedia_{}_{}", safe_title, timestamp);
-    
-    // Create full paths for both formats
-    let txt_path = if output_path.is_dir() {
-        output_path.join(format!("{}.txt", base_filename))
-    } else if output_path.extension().is_some() {
-        // User provided a specific filename
+    // Create full paths for both formats  
+    let txt_path = if output_path.extension().is_some() {
         output_path.clone()
     } else {
-        // User provided a path without extension, add .txt
         output_path.with_extension("txt")
     };
     
@@ -8330,6 +8412,22 @@ async fn interactive_dictionary_arts_sciences_creation(settings: &InteractiveSet
         if custom_title.trim().to_lowercase() == "back" {
             continue;
         }
+        
+        // Get description (optional)
+        let description_input: String = Input::new()
+            .with_prompt("Describe the focus and scope of this encyclopedia (optional, press Enter to skip)")
+            .default("".to_string())
+            .interact_text()?;
+        
+        if description_input.trim().to_lowercase() == "back" {
+            continue;
+        }
+        
+        let description = if description_input.trim().is_empty() {
+            None
+        } else {
+            Some(description_input.trim().to_string())
+        };
         
         // Volume structure selection
         let volume_types = vec![
@@ -8466,6 +8564,7 @@ async fn interactive_dictionary_arts_sciences_creation(settings: &InteractiveSet
             &subject_area,
             subject_display,
             &custom_title,
+            description.as_ref(),
             &volume_structure,
             article_count,
             &cross_ref_level,
@@ -8499,6 +8598,12 @@ async fn write_encyclopedia_entry(
     topic_title: &str,
     main_topic: &str,
     scope: &str,
+    description: Option<&String>,
+    master_intelligence: &MasterIntelligenceSystem,
+    self_healing_writer: &mut SelfHealingWriter,
+    advanced_learning: &mut AdvancedLearningSystem,
+    neural_creativity: &mut NeuralCreativityEnhancer,
+    cognitive_engine: &CognitiveWritingEngine,
     _progress_bar: &ProgressBar,
 ) -> Result<()> {
     let target_words = match scope {
@@ -8508,10 +8613,16 @@ async fn write_encyclopedia_entry(
         _ => 500,
     };
     
+    let description_context = if let Some(desc) = description {
+        format!("\n        Encyclopedia Context: {}\n", desc)
+    } else {
+        String::new()
+    };
+    
     let prompt = format!(
         "Write a comprehensive encyclopedia entry about: {}
 
-        This is entry {} in an encyclopedia about {}.
+        This is entry {} in an encyclopedia about {}.{}
         
         Structure the entry with the following format:
         TOPIC: {}
@@ -8523,42 +8634,266 @@ async fn write_encyclopedia_entry(
         
         Make it exactly {} words and ensure it reads like a proper encyclopedia entry.
         Be factual, informative, and well-structured.
-        
+        {}
         The entry should be comprehensive yet accessible to general readers.",
-        topic_title, entry_num, main_topic, topic_title, target_words
+        topic_title, 
+        entry_num, 
+        main_topic,
+        description_context,
+        topic_title, 
+        target_words,
+        if description.is_some() { 
+            "Focus on aspects that align with the encyclopedia's described purpose and scope." 
+        } else { 
+            "" 
+        }
     );
     
-    let entry_content = match client {
-        AIClient::HuggingFace(hf_client) => {
-            hf_client.generate_text(&prompt, (target_words as f32 * 1.3) as u32, 0.7).await?
-        },
-        AIClient::Ollama(ollama_client) => {
-            ollama_client.generate_text(model, &prompt, (target_words as f32 * 1.3) as i32, 0.7).await?
-        }
-    };
+    // Enhanced AI-powered generation with all systems
+    println!("🧠 Generating entry '{}' using Advanced AI Systems...", topic_title);
     
-    // Create the section
-    let section = crate::content::Section::new(
+    // Pre-generation cognitive and creativity analysis
+    println!("   🎨 Neural creativity enhancement for topic: {}", topic_title);
+    let creative_context = crate::neural_creativity_enhancer::CreativeContext {
+        genre: Genre::NonFiction,
+        style: WritingStyle::Academic,
+        theme: topic_title.to_string(),
+        emotional_tone: "Scholarly and informative".to_string(),
+        target_creativity: 0.7,
+    };
+    let enhanced_creativity = neural_creativity.generate_creative_inspiration(&creative_context, 0.8);
+    
+    println!("   🧠 Cognitive prompt enhancement for encyclopedia entry...");
+    let writing_goals = crate::cognitive_writing_engine::WritingGoals {
+        primary_objectives: vec![format!("Create comprehensive encyclopedia entry about {}", topic_title)],
+        quality_targets: std::collections::HashMap::from([
+            ("accuracy".to_string(), 0.95),
+            ("clarity".to_string(), 0.85),
+            ("comprehensiveness".to_string(), 0.90),
+        ]),
+        creative_ambitions: vec!["Engage readers with clear explanations".to_string()],
+        audience_impact_goals: vec!["Educate general readers with expert-level information".to_string()],
+    };
+    let cognitive_enhancement = cognitive_engine.cognitive_prompt_enhancement(&prompt, &writing_goals);
+    
+    println!("   📚 Advanced learning system analysis...");
+    let learning_context = crate::advanced_learning_system::WritingContext {
+        genre: Genre::NonFiction,
+        style: WritingStyle::Academic,
+        target_audience: "General readers seeking detailed information".to_string(),
+        constraints: vec![format!("Target length: {} words", target_words), "Academic yet accessible".to_string()],
+        purpose: format!("Create comprehensive encyclopedia entry about {}", topic_title),
+    };
+    let learning_insights = advanced_learning.get_writing_quality_predictions(&Genre::NonFiction, &WritingStyle::Academic);
+    
+    let mut generation_attempts = 0;
+    let max_attempts = 3;
+    let mut entry_content = String::new();
+    
+    // Try superintelligent generation first with retries and style experimentation
+    while generation_attempts < max_attempts {
+        generation_attempts += 1;
+        
+        let generation_result = if generation_attempts == 1 {
+            // First attempt: Try superintelligent generation with cognitive enhancement
+            println!("   🎯 Attempt {}: Using enhanced superintelligent generation...", generation_attempts);
+            let enhanced_prompt = format!("{}\n\n{}\n\n{}", 
+                prompt, 
+                cognitive_enhancement.cognitive_instructions.join("\n"),
+                enhanced_creativity.primary_inspirations.join("\n")
+            );
+            match master_intelligence.superintelligent_generation(
+                client,
+                model,
+                &enhanced_prompt,
+                entry_num,
+                &BookSize::Medium, // Map encyclopedia scope to book size
+                &Genre::NonFiction,
+                &WritingStyle::Academic,
+                &format!("Encyclopedia entry about {} in {}", topic_title, main_topic),
+            ).await {
+                Ok(intelligent_output) => {
+                    println!("   ✅ Superintelligent generation successful!");
+                    Ok(intelligent_output.content)
+                }
+                Err(e) => {
+                    println!("   ⚠️ Superintelligent generation failed: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            // Subsequent attempts: Use style experimentation
+            let style_variants = vec!["scholarly", "accessible", "technical", "narrative"];
+            let chosen_style = style_variants[(entry_num + generation_attempts) % style_variants.len()];
+            
+            println!("   🔄 Attempt {}: Using {} style with enhanced generation...", generation_attempts, chosen_style);
+            
+            let enhanced_prompt = format!(
+                "{}\n\nStyle guidance: Write in a {} style that would be most appropriate for this topic. \
+                Focus on providing comprehensive, detailed content that thoroughly explains the topic.",
+                prompt, chosen_style
+            );
+            
+            match client {
+                AIClient::HuggingFace(hf_client) => {
+                    hf_client.generate_text(&enhanced_prompt, (target_words as f32 * 1.6) as u32, 0.8).await
+                },
+                AIClient::Ollama(ollama_client) => {
+                    ollama_client.generate_text(model, &enhanced_prompt, (target_words as f32 * 1.6) as i32, 0.8).await
+                }
+            }
+        };
+        
+        match generation_result {
+            Ok(content) => {
+                let word_count = count_words(&content);
+                if word_count >= 50 && content.trim().len() >= 100 {
+                    entry_content = content;
+                    println!("   ✅ Generation successful ({} words)", word_count);
+                    
+                    // Learn from success
+                    if generation_attempts > 1 {
+                        self_healing_writer.record_strategy_outcome(
+                            "insufficient_content",
+                            &crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                            crate::self_healing_writer::ResolutionStrategy::ChangeWritingStyle,
+                            true
+                        );
+                    }
+                    break;
+                } else {
+                    println!("   ⚠️ Content too short ({} words), retrying...", word_count);
+                    if generation_attempts < max_attempts {
+                        // Learn from this partial failure
+                        self_healing_writer.record_strategy_outcome(
+                            "insufficient_content",
+                            &crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                            crate::self_healing_writer::ResolutionStrategy::RetryWithDelay,
+                            false
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                println!("   ❌ Generation attempt {} failed: {}", generation_attempts, e);
+                if generation_attempts < max_attempts {
+                    // Learn from error and get suggestions for next attempt
+                    self_healing_writer.learn_from_error(
+                        crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                        &e.to_string(),
+                        "Encyclopedia generation attempt failed",
+                        None,
+                        false
+                    );
+                    let suggestions = self_healing_writer.suggest_best_resolution(&crate::self_healing_writer::GenerationPhase::DescriptiveWriting, &e.to_string());
+                    if !suggestions.is_empty() {
+                        println!("   💡 Self-healing suggestion: {:?}", suggestions[0]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // If all attempts failed, use enhanced fallback
+    if entry_content.is_empty() || count_words(&entry_content) < 50 {
+        println!("   🛡️ All generation attempts insufficient, creating enhanced fallback...");
+        entry_content = create_enhanced_fallback_encyclopedia_entry(topic_title, target_words, main_topic, description);
+    }
+    
+    // Final content is already validated and ready
+    println!("🔍 Enhanced encyclopedia entry for '{}' ({} chars):", topic_title, entry_content.len());
+    println!("Preview: {}", entry_content.chars().take(200).collect::<String>());
+    
+    let final_content = entry_content;
+    
+    // Create the section with proper content handling
+    let mut section = crate::content::Section::new(
         entry_num,
         topic_title.to_string(),
-        format!("Encyclopedia entry: {}", topic_title),
+        String::new(), // Empty outline
         crate::content::SectionType::Section,
     );
+    section.set_content(final_content);
     
-    // Add content to the section
-    let mut new_section = section;
-    new_section.set_content(entry_content);
-    
-    content.add_section(new_section);
+    content.add_section(section);
     content.updated_at = chrono::Utc::now();
     
     Ok(())
+}
+
+fn create_fallback_encyclopedia_entry(topic: &str, target_words: usize, main_topic: &str) -> String {
+    // Create a basic encyclopedia entry when AI fails to generate sufficient content
+    let word_count = if target_words < 100 { 150 } else { target_words };
+    
+    format!(
+        "{} is a significant topic within the field of {}. This subject encompasses various aspects \
+        and considerations that are important for understanding the broader context of {}.\n\n\
+        The study of {} involves examining its fundamental principles, practical applications, \
+        and relationship to other concepts within {}. Researchers and scholars have explored \
+        various dimensions of this topic, contributing to our understanding through theoretical \
+        frameworks and empirical investigations.\n\n\
+        In the context of {}, {} represents an area of inquiry that continues to evolve \
+        as new discoveries and methodologies emerge. The significance of {} extends beyond \
+        its immediate domain, influencing related fields and contributing to interdisciplinary \
+        approaches to knowledge.\n\n\
+        Contemporary perspectives on {} reflect both historical foundations and modern \
+        developments in the field. The ongoing study of this topic contributes to advancing \
+        our comprehensive understanding of {} and its broader implications.",
+        topic, main_topic, main_topic,
+        topic, main_topic,
+        main_topic, topic,
+        topic,
+        topic,
+        main_topic
+    )
+}
+
+fn create_enhanced_fallback_encyclopedia_entry(topic: &str, target_words: usize, main_topic: &str, description: Option<&String>) -> String {
+    // Create an enhanced encyclopedia entry with description context when AI fails
+    let word_count = if target_words < 100 { 200 } else { target_words };
+    
+    let description_context = if let Some(desc) = description {
+        format!("Within the context of {}, ", desc.to_lowercase())
+    } else {
+        String::new()
+    };
+    
+    format!(
+        "TOPIC: {}\n\n\
+        DEFINITION: {}{} represents a fundamental concept within the domain of {}. \
+        This topic encompasses multiple dimensions of understanding and practical application \
+        that are essential for comprehensive knowledge in this field.\n\n\
+        OVERVIEW: The significance of {} extends across various theoretical and practical domains. \
+        {}this subject matter involves complex interactions between foundational principles, \
+        methodological approaches, and real-world applications. Understanding {} requires \
+        examination of its historical development, current state, and future implications.\n\n\
+        SIGNIFICANCE: In the broader context of {}, {} plays a crucial role in shaping \
+        our understanding of related concepts and phenomena. This topic connects to numerous \
+        other areas of study, creating interdisciplinary bridges that enhance our overall \
+        comprehension of the field.\n\n\
+        APPLICATIONS: The practical implications of {} are evident in various domains, \
+        from theoretical research to applied problem-solving. Contemporary approaches to \
+        understanding {} continue to evolve as new methodologies and perspectives emerge, \
+        contributing to the dynamic nature of knowledge in {}.\n\n\
+        This encyclopedia entry serves as an introduction to the complex and multifaceted \
+        nature of {}, providing a foundation for deeper exploration of this important topic.",
+        topic.to_uppercase(),
+        description_context, topic, main_topic,
+        topic,
+        description_context, topic,
+        main_topic, topic,
+        topic,
+        topic,
+        main_topic,
+        topic
+    )
 }
 
 async fn create_dictionary_arts_sciences(
     subject_area: &str,
     subject_display: &str, 
     custom_title: &str,
+    description: Option<&String>,
     volume_structure: &str,
     article_count: usize,
     cross_ref_level: &str,
@@ -8593,12 +8928,21 @@ async fn create_dictionary_arts_sciences(
     let author = "Generated by Pundit Writer".to_string();
     let genre = "Reference".to_string();
     let style = "Academic".to_string();
-    let premise = format!(
-        "A comprehensive dictionary of {} following the model of Ephraim Chambers' Cyclopædia, \
-        containing alphabetical articles with extensive cross-references connecting related topics \
-        in the arts, sciences, and crafts.", 
-        subject_display.to_lowercase()
-    );
+    let premise = if let Some(desc) = description {
+        format!(
+            "A comprehensive dictionary of {} following the model of Ephraim Chambers' Cyclopædia: {}. \
+            Contains alphabetical articles with extensive cross-references connecting related topics \
+            in the arts, sciences, and crafts.", 
+            subject_display.to_lowercase(), desc
+        )
+    } else {
+        format!(
+            "A comprehensive dictionary of {} following the model of Ephraim Chambers' Cyclopædia, \
+            containing alphabetical articles with extensive cross-references connecting related topics \
+            in the arts, sciences, and crafts.", 
+            subject_display.to_lowercase()
+        )
+    };
     
     let mut content = Content::new_book(
         title.clone(),
@@ -8614,9 +8958,29 @@ async fn create_dictionary_arts_sciences(
     
     content.content_type = crate::content::ContentType::DictionaryArtsSciences;
     
+    // Initialize complete AI learning and intelligence systems for Chambers' Cyclopædia
+    println!("🧠 Initializing Advanced AI Learning for Chambers' Cyclopædia...");
+    let master_intelligence = MasterIntelligenceSystem::new();
+    let mut self_healing_writer = SelfHealingWriter::new();
+    let mut advanced_learning = AdvancedLearningSystem::new();
+    let mut neural_creativity = NeuralCreativityEnhancer::new();
+    let cognitive_engine = CognitiveWritingEngine::new();
+    
+    // Configure for dictionary/encyclopedia generation with enhanced learning
+    self_healing_writer.learning_enabled = true;
+    self_healing_writer.auto_retry_attempts = 3;
+    // advanced_learning.enable_deep_analysis(true); // Method doesn't exist
+    
+    println!("   ✨ Master Intelligence System: ACTIVE");
+    println!("   🔄 Self-Healing Writer: ENABLED");
+    println!("   📚 Advanced Learning System: ENABLED");
+    println!("   🎨 Neural Creativity Enhancer: ACTIVE");
+    println!("   🧠 Cognitive Writing Engine: ACTIVE");
+    println!("   🌟 Enhanced Chambers' Generation: READY");
+    
     // Generate dictionary outline with alphabetical organization
     println!("📋 Creating systematic outline...");
-    let outline = generate_dictionary_outline(subject_area, article_count, cross_ref_level).await?;
+    let outline = generate_dictionary_outline(subject_area, article_count, cross_ref_level, description).await?;
     content.outline = outline.clone();
     
     // Generate articles in alphabetical order
@@ -8634,6 +8998,11 @@ async fn create_dictionary_arts_sciences(
             subject_area,
             cross_ref_level,
             &article_topics,
+            &master_intelligence,
+            &mut self_healing_writer,
+            &mut advanced_learning,
+            &mut neural_creativity,
+            &cognitive_engine,
             &progress_bar,
         ).await?;
         
@@ -8649,26 +9018,35 @@ async fn create_dictionary_arts_sciences(
         .collect::<String>()
         .replace(' ', "_");
         
-    // Handle output path properly
+    // Always use Documents folder for output
+    let default_dir = crate::config::get_default_output_dir();
+    std::fs::create_dir_all(&default_dir)?;
+    
+    let base_filename = format!("dictionary_arts_sciences_{}_{}", safe_title, timestamp);
+    
     let output_path = match output {
-        Some(path) => std::path::PathBuf::from(path),
+        Some(path) => {
+            let user_path = std::path::PathBuf::from(path);
+            if user_path.is_absolute() {
+                user_path
+            } else {
+                // If user provides relative path, put it in Documents folder
+                default_dir.join(user_path)
+            }
+        },
         None => {
-            let default_dir = crate::config::get_default_output_dir();
-            default_dir.join(format!("{}.txt", safe_title))
+            // Default to Documents folder with generated filename
+            default_dir.join(format!("{}.txt", base_filename))
         }
     };
     
-    // Ensure parent directory exists
+    // Ensure parent directory exists for user-specified paths
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     
-    let base_filename = format!("dictionary_arts_sciences_{}_{}", safe_title, timestamp);
-    
-    // Create full paths for both formats
-    let txt_path = if output_path.is_dir() {
-        output_path.join(format!("{}.txt", base_filename))
-    } else if output_path.extension().is_some() {
+    // Create full paths for both formats  
+    let txt_path = if output_path.extension().is_some() {
         output_path.clone()
     } else {
         output_path.with_extension("txt")
@@ -8690,7 +9068,7 @@ async fn create_dictionary_arts_sciences(
     Ok(())
 }
 
-async fn generate_dictionary_outline(subject_area: &str, article_count: usize, cross_ref_level: &str) -> Result<String> {
+async fn generate_dictionary_outline(subject_area: &str, article_count: usize, cross_ref_level: &str, description: Option<&String>) -> Result<String> {
     let subject_focus = match subject_area {
         "universal" => "all branches of knowledge including natural philosophy, mathematics, liberal arts, and practical crafts",
         "natural_sciences" => "natural philosophy, physics, chemistry, astronomy, botany, zoology, and related sciences",
@@ -8707,18 +9085,24 @@ async fn generate_dictionary_outline(subject_area: &str, article_count: usize, c
         _ => "with comprehensive cross-referencing",
     };
     
+    // Include description context if provided
+    let description_context = if let Some(desc) = description {
+        format!("\nSpecific Focus: {}\n", desc)
+    } else {
+        String::new()
+    };
+    
     // Generate alphabetical topics based on subject area
     let outline = format!(
         "A DICTIONARY OF ARTS AND SCIENCES\n\
         \n\
-        Covering {} {}, organized alphabetically for both dictionary lookup and systematic study.\n\
-        \n\
+        Covering {} {}, organized alphabetically for both dictionary lookup and systematic study.{}\n\
         Target articles: {}\n\
         Cross-referencing: {}\n\
         \n\
         ALPHABETICAL STRUCTURE:\n\
         {}",
-        subject_focus, cross_ref_description, article_count, cross_ref_level,
+        subject_focus, cross_ref_description, description_context, article_count, cross_ref_level,
         generate_alphabetical_topics(subject_area, article_count)
     );
     
@@ -8796,6 +9180,11 @@ async fn write_dictionary_article(
     subject_area: &str,
     cross_ref_level: &str,
     all_topics: &[String],
+    master_intelligence: &MasterIntelligenceSystem,
+    self_healing_writer: &mut SelfHealingWriter,
+    advanced_learning: &mut AdvancedLearningSystem,
+    neural_creativity: &mut NeuralCreativityEnhancer,
+    cognitive_engine: &CognitiveWritingEngine,
     _progress_bar: &ProgressBar,
 ) -> Result<()> {
     let target_words = match cross_ref_level {
@@ -8813,54 +9202,193 @@ async fn write_dictionary_article(
     );
     
     let prompt = format!(
-        "You are creating a comprehensive Dictionary of Arts and Sciences article about: {}
+        "ENCYCLOPEDIA ARTICLE WRITING TASK
 
-        This is article {} following Ephraim Chambers' Cyclopædia model (1728).
-        Subject focus: {}
-        
-        IMPORTANT: Write the complete article with FULL CONTENT, not just an outline or summary.
-        
-        Format the article exactly as:
-        
-        {topic_uppercase}
-        
-        [Write multiple detailed paragraphs explaining the topic comprehensively]
-        
-        Requirements:
-        - Start with the HEADWORD in all capitals: {topic_uppercase}
-        - Write AT LEAST {target_words} words of detailed explanation
-        - Provide etymology and comprehensive definition
-        - Include historical development and significance in detail
-        - Explain practical applications and methodology thoroughly
-        - Connect to broader subjects and related arts/sciences
-        - {cross_ref_instruction}
-        - Use formal, scholarly language appropriate to the 18th century
-        - Include technical details and scientific principles where relevant
-        - Write multiple paragraphs of substantial content, NOT just bullet points
-        - Each paragraph should be at least 100 words long
-        
-        DO NOT write just an outline or list. Write the complete article text with full explanations.
-        Target length: {target_words} words minimum.
-        
-        Write in the learned, systematic style of Chambers' original Cyclopædia with complete paragraphs and detailed explanations.",
-        topic, article_num, get_subject_description(subject_area), 
-        topic_uppercase = topic, cross_ref_instruction = cross_ref_instruction, target_words = target_words
+You must write a complete, comprehensive encyclopedia article about: {}
+
+This is article #{} for a Dictionary of Arts and Sciences following Ephraim Chambers' Cyclopædia model (1728).
+Subject focus: {}
+
+CRITICAL REQUIREMENTS:
+1. Write FULL ARTICLE CONTENT - NOT just a title or outline
+2. Minimum length: {} words of detailed explanation  
+3. Start with headword: {}
+4. Write multiple substantial paragraphs (each 100+ words)
+5. Include comprehensive definition and etymology
+6. Explain historical development and significance
+7. Detail practical applications and methodology
+8. Connect to related subjects: {}
+9. Use formal, scholarly 18th-century language
+10. Include technical details and scientific principles
+
+ARTICLE FORMAT:
+{}
+
+[Write at least 3-4 detailed paragraphs here explaining the topic thoroughly. Do not stop at just the headword - write the complete article content with full explanations, examples, and scholarly detail.]
+
+REMEMBER: You are writing the COMPLETE ARTICLE, not just an outline. Write {} words minimum of detailed content explaining this topic comprehensively in the style of an 18th-century learned encyclopedia.",
+        topic, article_num, get_subject_description(subject_area),
+        target_words, topic, cross_ref_instruction, topic, target_words
     );
     
-    let article_content = match client {
-        AIClient::HuggingFace(hf_client) => {
-            hf_client.generate_text(&prompt, (target_words * 2) as u32, 0.7).await?
-        },
-        AIClient::Ollama(ollama_client) => {
-            ollama_client.generate_text(model, &prompt, (target_words * 2) as i32, 0.7).await?
-        },
-    };
+    // Enhanced AI-powered generation for Chambers' Cyclopædia
+    println!("🧠 Generating Chambers' article '{}' using Advanced AI Systems...", topic);
     
-    // Debug: Check what content was actually generated
-    println!("🔍 Generated article content for '{}' ({} chars):", topic, article_content.len());
+    // Pre-generation cognitive and creativity analysis for 18th-century style
+    println!("   🎨 Neural creativity enhancement for historical topic: {}", topic);
+    let historical_creative_context = crate::neural_creativity_enhancer::CreativeContext {
+        genre: Genre::NonFiction,
+        style: WritingStyle::Classical,
+        theme: format!("18th-century scholarly article about {}", topic),
+        emotional_tone: "Learned and formal in the manner of Ephraim Chambers".to_string(),
+        target_creativity: 0.6,
+    };
+    let historical_creativity = neural_creativity.generate_creative_inspiration(&historical_creative_context, 0.7);
+    
+    println!("   🧠 Cognitive enhancement for Chambers' style...");
+    let chambers_goals = crate::cognitive_writing_engine::WritingGoals {
+        primary_objectives: vec![format!("Create comprehensive Chambers' Cyclopædia article about {}", topic)],
+        quality_targets: std::collections::HashMap::from([
+            ("historical_accuracy".to_string(), 0.95),
+            ("scholarly_tone".to_string(), 0.90),
+            ("comprehensiveness".to_string(), 0.95),
+        ]),
+        creative_ambitions: vec!["Write in the style of 18th-century learned discourse".to_string()],
+        audience_impact_goals: vec!["Educate scholars with comprehensive cross-referenced knowledge".to_string()],
+    };
+    let chambers_enhancement = cognitive_engine.cognitive_prompt_enhancement(&prompt, &chambers_goals);
+    
+    println!("   📚 Advanced learning system for historical academic writing...");
+    let chambers_context = crate::advanced_learning_system::WritingContext {
+        genre: Genre::NonFiction,
+        style: WritingStyle::Classical,
+        target_audience: "18th-century educated readers and scholars".to_string(),
+        constraints: vec![format!("Target length: {} words", target_words), "Historical 18th-century style".to_string()],
+        purpose: format!("Create comprehensive Chambers' Cyclopædia article about {}", topic),
+    };
+    let historical_insights = advanced_learning.get_writing_quality_predictions(&Genre::NonFiction, &WritingStyle::Academic);
+    
+    let mut generation_attempts = 0;
+    let max_attempts = 3;
+    let mut article_content = String::new();
+    
+    // Try enhanced generation with 18th-century style focus and cross-references
+    while generation_attempts < max_attempts {
+        generation_attempts += 1;
+        
+        let generation_result = if generation_attempts == 1 {
+            // First attempt: Try enhanced superintelligent generation with historical style
+            println!("   🎯 Attempt {}: Using enhanced superintelligent 18th-century generation...", generation_attempts);
+            let enhanced_chambers_prompt = format!("{}\n\n{}\n\n{}", 
+                prompt, 
+                chambers_enhancement.cognitive_instructions.join("\n"),
+                historical_creativity.primary_inspirations.join("\n")
+            );
+            match master_intelligence.superintelligent_generation(
+                client,
+                model,
+                &enhanced_chambers_prompt,
+                article_num,
+                &BookSize::Large, // Chambers was comprehensive
+                &Genre::NonFiction,
+                &WritingStyle::Classical,
+                &format!("18th-century encyclopedia article about {} with cross-references to {}", topic, related_topics.join(", ")),
+            ).await {
+                Ok(intelligent_output) => {
+                    println!("   ✅ Superintelligent Chambers' generation successful!");
+                    Ok(intelligent_output.content)
+                }
+                Err(e) => {
+                    println!("   ⚠️ Superintelligent generation failed: {}", e);
+                    Err(e)
+                }
+            }
+        } else {
+            // Subsequent attempts: Use style experimentation with 18th-century focus
+            let period_styles = vec!["learned", "scholarly", "philosophical", "technical"];
+            let chosen_style = period_styles[(article_num + generation_attempts) % period_styles.len()];
+            
+            println!("   🔄 Attempt {}: Using {} 18th-century style adaptation...", generation_attempts, chosen_style);
+            
+            let enhanced_prompt = format!(
+                "{}\n\nStyle guidance: Write in a {} 18th-century style following Ephraim Chambers' model. \
+                Use formal language, extensive cross-references, and scholarly precision. \
+                Include practical applications and theoretical foundations as appropriate for the era.",
+                prompt, chosen_style
+            );
+            
+            match client {
+                AIClient::HuggingFace(hf_client) => {
+                    hf_client.generate_text(&enhanced_prompt, (target_words as f32 * 1.8) as u32, 0.7).await
+                },
+                AIClient::Ollama(ollama_client) => {
+                    ollama_client.generate_text(model, &enhanced_prompt, (target_words as f32 * 1.8) as i32, 0.7).await
+                }
+            }
+        };
+        
+        match generation_result {
+            Ok(content) => {
+                let word_count = count_words(&content);
+                if word_count >= 50 && content.trim().len() >= 100 {
+                    article_content = content;
+                    println!("   ✅ Chambers' generation successful ({} words)", word_count);
+                    
+                    // Learn from success
+                    if generation_attempts > 1 {
+                        self_healing_writer.record_strategy_outcome(
+                            "insufficient_chambers_content",
+                            &crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                            crate::self_healing_writer::ResolutionStrategy::ChangeWritingStyle,
+                            true
+                        );
+                    }
+                    break;
+                } else {
+                    println!("   ⚠️ Chambers' content too short ({} words), retrying...", word_count);
+                    if generation_attempts < max_attempts {
+                        // Learn from this partial failure
+                        self_healing_writer.record_strategy_outcome(
+                            "insufficient_chambers_content",
+                            &crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                            crate::self_healing_writer::ResolutionStrategy::RetryWithDelay,
+                            false
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                println!("   ❌ Chambers' generation attempt {} failed: {}", generation_attempts, e);
+                if generation_attempts < max_attempts {
+                    // Learn from error and get suggestions for next attempt
+                    self_healing_writer.learn_from_error(
+                        crate::self_healing_writer::GenerationPhase::DescriptiveWriting,
+                        &e.to_string(),
+                        "Encyclopedia generation attempt failed",
+                        None,
+                        false
+                    );
+                    let suggestions = self_healing_writer.suggest_best_resolution(&crate::self_healing_writer::GenerationPhase::DescriptiveWriting, &e.to_string());
+                    if !suggestions.is_empty() {
+                        println!("   💡 Self-healing suggestion: {:?}", suggestions[0]);
+                    }
+                }
+            }
+        }
+    }
+    
+    // If all attempts failed, use enhanced Chambers' fallback
+    if article_content.is_empty() || count_words(&article_content) < 50 {
+        println!("   🛡️ All Chambers' attempts insufficient, creating enhanced historical fallback...");
+        article_content = create_fallback_encyclopedia_article(topic, target_words, subject_area, &related_topics);
+    }
+    
+    // Final content is already validated and ready
+    println!("🔍 Enhanced Chambers' article for '{}' ({} chars):", topic, article_content.len());
     println!("Preview: {}", article_content.chars().take(200).collect::<String>());
     
-    let mut section = Section::new(article_num, topic.to_string(), article_content, SectionType::Section);
+    let mut section = Section::new(article_num, topic.to_string(), String::new(), SectionType::Section);
+    section.set_content(article_content);
     section.word_count = count_words(&section.content);
     let word_count = section.word_count;
     content.sections.push(section);
@@ -8868,6 +9396,35 @@ async fn write_dictionary_article(
     content.updated_at = chrono::Utc::now();
     
     Ok(())
+}
+
+fn create_fallback_encyclopedia_article(topic: &str, target_words: usize, subject_area: &str, related_topics: &[String]) -> String {
+    // Create a basic but comprehensive encyclopedia article when AI fails to generate content
+    let topic_upper = topic.to_uppercase();
+    let subject_desc = get_subject_description(subject_area);
+    let cross_refs = if !related_topics.is_empty() {
+        format!("\n\nSee also: {}", related_topics.join(", "))
+    } else {
+        String::new()
+    };
+    
+    format!("{}
+
+{}, a subject within the realm of {}, represents one of the fundamental areas of human knowledge and inquiry that has engaged scholars and practitioners throughout the ages.
+
+The term {} derives from classical sources and has been employed by learned authorities to denote the systematic study and practice of this particular discipline. In the tradition of natural philosophy and the systematic organization of knowledge, this subject occupies a place of considerable importance within the broader framework of the arts and sciences.
+
+The historical development of {} can be traced through various epochs of human learning, from the ancient masters who first established the principles underlying this field, through the medieval scholastics who refined and systematized the knowledge, to the modern practitioners who continue to advance our understanding through careful observation and methodical investigation.
+
+In its practical applications, {} serves numerous purposes within both theoretical and applied contexts. The principles governing this subject are employed by practitioners in various capacities, contributing to the advancement of human knowledge and the improvement of conditions for society at large.
+
+The methodology employed in the study of {} follows the established practices of systematic inquiry, involving careful observation, the formulation of hypotheses based upon empirical evidence, and the rigorous testing of theoretical propositions through practical application.
+
+Within the broader context of the arts and sciences, {} maintains important connections to related fields of study, demonstrating the interconnected nature of human knowledge and the value of comprehensive learning that encompasses multiple disciplines.
+
+The significance of {} in contemporary practice cannot be understated, as it continues to provide valuable insights and practical applications that serve both scholarly investigation and practical endeavors. Students and practitioners of this subject contribute to the ongoing development of human understanding and the advancement of civilization through their dedicated study and application of these principles.{}",
+        topic_upper, topic, subject_desc, topic, topic, topic, topic, topic, topic, cross_refs
+    )
 }
 
 fn get_subject_description(subject_area: &str) -> &str {
@@ -13466,7 +14023,7 @@ fn phase_to_string(phase: &GenerationPhase) -> &'static str {
         GenerationPhase::ChapterWriting => "Chapter Writing",
         GenerationPhase::SceneGeneration => "Scene Generation",
         GenerationPhase::DialogueCreation => "Dialogue Creation",
-        GenerationPhase::DescriptiveWriting => "Descriptive Writing",
+        crate::self_healing_writer::GenerationPhase::DescriptiveWriting => "Descriptive Writing",
         GenerationPhase::CharacterDevelopment => "Character Development",
         GenerationPhase::PlotAdvancement => "Plot Advancement",
         GenerationPhase::TemporalContinuity => "Temporal Continuity",
